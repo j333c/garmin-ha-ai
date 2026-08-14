@@ -1,0 +1,20 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Home Assistant local storage & secrets
+.storage/
+secrets.yaml
+garmin_tokens.json
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
