@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Garmin HA AI Setup",
+        "description": "Configure your Garmin Connect credentials and AI provider options.",
+        "data": {
+          "username": "Garmin Email / Username",
+          "password": "Garmin Password",
+          "ai_provider": "AI Provider",
+          "ai_api_key": "AI API Key",
+          "fitness_goals": "Initial Fitness & Health Goals (Optional)"
+        }
+      },
+      "mfa": {
+        "title": "Garmin MFA Authentication",
+        "description": "Please enter the 6-digit passcode sent by Garmin.",
+        "data": {
+          "mfa_code": "6-Digit Passcode"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Garmin Account",
+        "description": "Your Garmin session has expired. Please re-enter your password.",
+        "data": {
+          "password": "Garmin Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid Garmin credentials or expired session.",
+      "cannot_connect": "Failed to connect to Garmin Connect servers.",
+      "mfa_required": "MFA passcode is required.",
+      "invalid_mfa": "Invalid 6-digit MFA passcode. Please try again.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Garmin account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  }
+}
