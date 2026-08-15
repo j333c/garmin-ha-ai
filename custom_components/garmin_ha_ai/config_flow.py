@@ -178,3 +178,13 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(
             title=f"Garmin ({username})", data=entry_data
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Get the options flow for this handler."""
+        from .options_flow import GarminHaAiOptionsFlowHandler
+
+        return GarminHaAiOptionsFlowHandler(config_entry)

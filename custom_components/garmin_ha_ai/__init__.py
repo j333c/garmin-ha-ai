@@ -4,11 +4,27 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from .const import DOMAIN, LOGGER, PLATFORMS
+from .const import (
+    CONF_RETENTION_DAYS,
+    DEFAULT_RETENTION_DAYS,
+    DOMAIN,
+    LOGGER,
+    PLATFORMS,
+)
 from .coordinator import GarminDataUpdateCoordinator
 from .garmin_client import GarminClient
 from .services import async_setup_services
 from .storage import GarminStorage
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update by reloading config entry and pruning history."""
+    storage = GarminStorage(hass)
+    retention_days = entry.options.get(
+        CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
+    )
+    await storage.async_prune_history(retention_days)
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -35,6 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     LOGGER.debug("Setting up Garmin HA AI entry: %s", entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -57,5 +57,5 @@ development_status:
   epic-3: in-progress
   3-1-interactive-q-a-service-registration-history-grounding-servi: done
   3-2-last-answer-sensor-entity-interactive-lovelace-q-a-card-patt: review
-  3-3-ui-options-flow-retention-window-management-options_flow-py: backlog
+  3-3-ui-options-flow-retention-window-management-options_flow-py: review
   epic-3-retrospective: optional
