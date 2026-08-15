@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any
 
 from garminconnect import (
@@ -13,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import LOGGER
+from .models import GarminDailyMetrics
 from .storage import GarminStorage
 
 
@@ -109,3 +111,98 @@ class GarminClient:
         if not success or not self.client:
             raise ConfigEntryAuthFailed("No valid Garmin session available")
         return self.client
+
+    async def async_fetch_daily_metrics(
+        self, target_date: date | str | None = None
+    ) -> GarminDailyMetrics:
+        """Fetch and normalize daily health statistics for a target date."""
+        if isinstance(target_date, date):
+            date_str = target_date.isoformat()
+        elif isinstance(target_date, str):
+            date_str = target_date
+        else:
+            date_str = date.today().isoformat()
+
+        client = await self.async_get_client()
+
+        def _fetch_sync() -> GarminDailyMetrics:
+            summary_data: dict[str, Any] = {}
+            try:
+                summary_data = client.get_user_summary(date_str) or {}
+            except Exception as err:
+                LOGGER.warning("Could not fetch user summary for %s: %s", date_str, err)
+
+            sleep_score: int | None = None
+            try:
+                sleep_data = client.get_sleep_data(date_str) or {}
+                daily_sleep = sleep_data.get("dailySleepDTO", {})
+                scores = daily_sleep.get("sleepScores", {})
+                overall = scores.get("overall", {})
+                if isinstance(overall, dict):
+                    sleep_score = overall.get("value")
+            except Exception as err:
+                LOGGER.debug("Could not fetch sleep data for %s: %s", date_str, err)
+
+            hrv_status: str | None = None
+            try:
+                hrv_data = client.get_hrv_data(date_str) or {}
+                summary = hrv_data.get("hrvSummary", {})
+                if isinstance(summary, dict):
+                    hrv_status = summary.get("status")
+            except Exception as err:
+                LOGGER.debug("Could not fetch HRV data for %s: %s", date_str, err)
+
+            activities: list[dict[str, Any]] = []
+            try:
+                raw_activities = client.get_activities_by_date(date_str, date_str) or []
+                for act in raw_activities:
+                    act_type = (
+                        act.get("activityType", {}).get("typeKey")
+                        if isinstance(act.get("activityType"), dict)
+                        else None
+                    )
+                    activities.append({
+                        "activity_id": act.get("activityId"),
+                        "name": act.get("activityName"),
+                        "type": act_type,
+                        "duration_sec": act.get("duration"),
+                        "distance_m": act.get("distance"),
+                        "calories": act.get("calories"),
+                    })
+            except Exception as err:
+                LOGGER.debug("Could not fetch activities for %s: %s", date_str, err)
+
+            steps = summary_data.get("totalSteps")
+            distance_m = summary_data.get("totalDistanceMeters")
+            distance_km = round(distance_m / 1000.0, 2) if distance_m is not None else None
+            total_calories = summary_data.get("totalKilocalories") or summary_data.get(
+                "activeKilocalories"
+            )
+            resting_hr = summary_data.get("restingHeartRate")
+            avg_stress = summary_data.get("averageStressLevel")
+            body_battery_min = summary_data.get("bodyBatteryMinValue")
+            body_battery_max = summary_data.get("bodyBatteryMaxValue")
+
+            weight_g = summary_data.get("weight")
+            weight_kg = (
+                round(weight_g / 1000.0, 2)
+                if weight_g is not None and weight_g > 200
+                else (weight_g if weight_g else None)
+            )
+
+            return GarminDailyMetrics(
+                date=date_str,
+                steps=steps,
+                distance_km=distance_km,
+                total_calories=total_calories,
+                resting_hr=resting_hr,
+                avg_stress=avg_stress,
+                sleep_score=sleep_score,
+                hrv_status=hrv_status,
+                body_battery_min=body_battery_min,
+                body_battery_max=body_battery_max,
+                weight_kg=weight_kg,
+                activities=activities,
+            )
+
+        return await self.hass.async_add_executor_job(_fetch_sync)

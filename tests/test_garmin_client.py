@@ -192,3 +192,70 @@ def test_async_get_client() -> None:
             assert client is mock_garmin_inst
 
     asyncio.run(run())
+
+
+def test_async_fetch_daily_metrics() -> None:
+    """Test async_fetch_daily_metrics extracts and normalizes daily health stats."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_garmin_inst = MagicMock()
+        client_adapter.client = mock_garmin_inst
+
+        mock_garmin_inst.get_user_summary.return_value = {
+            "totalSteps": 10452,
+            "totalDistanceMeters": 8230,
+            "totalKilocalories": 2450,
+            "restingHeartRate": 58,
+            "averageStressLevel": 25,
+            "bodyBatteryMinValue": 15,
+            "bodyBatteryMaxValue": 95,
+            "weight": 75500,
+        }
+        mock_garmin_inst.get_sleep_data.return_value = {
+            "dailySleepDTO": {
+                "sleepScores": {
+                    "overall": {"value": 88}
+                }
+            }
+        }
+        mock_garmin_inst.get_hrv_data.return_value = {
+            "hrvSummary": {"status": "BALANCED"}
+        }
+        mock_garmin_inst.get_activities_by_date.return_value = [
+            {
+                "activityId": 12345,
+                "activityName": "Morning Run",
+                "activityType": {"typeKey": "running"},
+                "duration": 1800,
+                "distance": 5000,
+                "calories": 400,
+            }
+        ]
+
+        metrics = await client_adapter.async_fetch_daily_metrics("2026-08-15")
+
+        assert metrics.date == "2026-08-15"
+        assert metrics.steps == 10452
+        assert metrics.distance_km == 8.23
+        assert metrics.total_calories == 2450
+        assert metrics.resting_hr == 58
+        assert metrics.avg_stress == 25
+        assert metrics.sleep_score == 88
+        assert metrics.hrv_status == "BALANCED"
+        assert metrics.body_battery_min == 15
+        assert metrics.body_battery_max == 95
+        assert metrics.weight_kg == 75.5
+        assert len(metrics.activities) == 1
+        assert metrics.activities[0]["name"] == "Morning Run"
+
+    asyncio.run(run())
+
