@@ -160,3 +160,38 @@ def assemble_report_prompt(
     )
 
     return prompt
+
+
+def assemble_qa_prompt(
+    question: str,
+    history: list[GarminDailyMetrics | dict[str, Any]] | None = None,
+    user_goals: str | None = None,
+    coaching_directives: str | None = None,
+    max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
+) -> str:
+    """Assemble prompt payload for interactive Q&A session."""
+    history_list = history or []
+    block_history_content, _ = truncate_history_context(
+        history_list, max_chars=max_history_chars
+    )
+
+    block_goals = (user_goals or "").strip() or DEFAULT_USER_GOALS
+    block_directives = (coaching_directives or "").strip() or DEFAULT_COACHING_DIRECTIVES
+
+    prompt = (
+        f"### USER QUESTION\n"
+        f"{question.strip()}\n\n"
+        "### HISTORICAL METRICS CONTEXT\n"
+        f"{block_history_content}\n\n"
+        "### USER GOALS & PROFILE\n"
+        f"{block_goals}\n\n"
+        "### PERSONA & COACHING DIRECTIVES\n"
+        f"{block_directives}\n\n"
+        "### INSTRUCTIONS FOR RESPONSE:\n"
+        "1. Provide a clear, evidence-based, concise answer directly addressing the user's question.\n"
+        "2. Ground your recommendations using the provided historical health metrics and user goals.\n"
+        "3. Keep the tone encouraging, supportive, and actionable."
+    )
+
+    return prompt
+

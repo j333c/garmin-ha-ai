@@ -4,31 +4,17 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
-from .const import DOMAIN, LOGGER, PLATFORMS, SERVICE_GENERATE_REPORT
+from .const import DOMAIN, LOGGER, PLATFORMS
 from .coordinator import GarminDataUpdateCoordinator
 from .garmin_client import GarminClient
+from .services import async_setup_services
 from .storage import GarminStorage
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Garmin HA AI component."""
     hass.data.setdefault(DOMAIN, {})
-
-    async def handle_generate_report(call: ServiceCall) -> None:
-        """Handle generate_report service call."""
-        domain_data = hass.data.get(DOMAIN, {})
-        for entry_id, entry_data in domain_data.items():
-            if isinstance(entry_data, dict) and "coordinator" in entry_data:
-                coordinator: GarminDataUpdateCoordinator = entry_data["coordinator"]
-                await coordinator.async_generate_report(force=True)
-
-    if not hass.services.has_service(DOMAIN, SERVICE_GENERATE_REPORT):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_GENERATE_REPORT,
-            handle_generate_report,
-        )
-
+    await async_setup_services(hass)
     return True
 
 

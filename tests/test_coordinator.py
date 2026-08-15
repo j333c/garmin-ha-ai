@@ -1,10 +1,13 @@
 """Tests for Garmin HA AI DataUpdateCoordinator."""
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceNotFound
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.garmin_ha_ai.const import (
     CONF_AI_API_KEY,
@@ -13,211 +16,183 @@ from custom_components.garmin_ha_ai.const import (
 )
 from custom_components.garmin_ha_ai.coordinator import GarminDataUpdateCoordinator
 from custom_components.garmin_ha_ai.models import AIHealthReport, GarminDailyMetrics
-from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceNotFound
-from homeassistant.helpers.update_coordinator import UpdateFailed
 
 
-def test_coordinator_update_success() -> None:
+@pytest.mark.asyncio
+async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     """Test coordinator successfully fetches metrics and saves to storage."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
 
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
+    sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
+    mock_client.async_fetch_daily_metrics = AsyncMock(return_value=sample_metrics)
+    mock_storage.async_save_daily_metrics = AsyncMock()
 
-        sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
-        mock_client.async_fetch_daily_metrics = AsyncMock(return_value=sample_metrics)
-        mock_storage.async_save_daily_metrics = AsyncMock()
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
 
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
+    metrics = await coordinator._async_update_data()
 
-        mock_hass.async_create_task = MagicMock(side_effect=lambda coro: coro.close())
-
-        metrics = await coordinator._async_update_data()
-
-        assert metrics is sample_metrics
-        mock_client.async_fetch_daily_metrics.assert_called_once()
-        mock_storage.async_save_daily_metrics.assert_called_once_with(sample_metrics.to_dict())
-        mock_hass.async_create_task.assert_called_once()
-
-    asyncio.run(run())
+    assert metrics is sample_metrics
+    mock_client.async_fetch_daily_metrics.assert_called()
+    mock_storage.async_save_daily_metrics.assert_called_once_with(sample_metrics.to_dict())
 
 
-def test_coordinator_connection_error() -> None:
+@pytest.mark.asyncio
+async def test_coordinator_connection_error(hass: HomeAssistant) -> None:
     """Test coordinator handles network/connection errors by raising UpdateFailed."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
 
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
+    from garminconnect import GarminConnectConnectionError
 
-        from garminconnect import GarminConnectConnectionError
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        side_effect=GarminConnectConnectionError("Server unreachable")
+    )
 
-        mock_client.async_fetch_daily_metrics = AsyncMock(
-            side_effect=GarminConnectConnectionError("Server unreachable")
-        )
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
 
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
-
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
-
-    asyncio.run(run())
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
 
 
-def test_coordinator_auth_failure() -> None:
+@pytest.mark.asyncio
+async def test_coordinator_auth_failure(hass: HomeAssistant) -> None:
     """Test coordinator propagates ConfigEntryAuthFailed on auth failure."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
 
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        side_effect=ConfigEntryAuthFailed("Token expired")
+    )
 
-        mock_client.async_fetch_daily_metrics = AsyncMock(
-            side_effect=ConfigEntryAuthFailed("Token expired")
-        )
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
 
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
-
-        with pytest.raises(ConfigEntryAuthFailed):
-            await coordinator._async_update_data()
-
-    asyncio.run(run())
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
 
 
-def test_coordinator_async_generate_report_success() -> None:
+@pytest.mark.asyncio
+async def test_coordinator_async_generate_report_success(hass: HomeAssistant) -> None:
     """Test async_generate_report success flow."""
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test_key"}
+    mock_entry.options = {}
 
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test_key"}
-        mock_entry.options = {}
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
 
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
-        mock_storage.async_load_history = AsyncMock(return_value=[])
+    sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
 
-        sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    coordinator.data = sample_metrics
+    coordinator.async_update_listeners = MagicMock()
 
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
-        coordinator.data = sample_metrics
-        coordinator.async_update_listeners = MagicMock()
+    mock_report = AIHealthReport(
+        timestamp="2026-08-15T06:00:00Z",
+        short_summary="Great job today!",
+        full_report="# Full Report",
+        provider_used="gemini",
+        model_used="gemini-2.0-flash",
+    )
 
-        mock_report = AIHealthReport(
-            timestamp="2026-08-15T06:00:00Z",
-            short_summary="Great job today!",
-            full_report="# Full Report",
-            provider_used="gemini",
-            model_used="gemini-2.0-flash",
-        )
+    mock_provider = MagicMock()
+    mock_provider.async_generate_report = AsyncMock(return_value=mock_report)
 
-        mock_provider = MagicMock()
-        mock_provider.async_generate_report = AsyncMock(return_value=mock_report)
-
-        with patch(
-            "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
-            return_value=mock_provider,
-        ):
-            report = await coordinator.async_generate_report()
-
-            assert report is mock_report
-            assert coordinator.latest_report is mock_report
-            coordinator.async_update_listeners.assert_called_once()
-            assert coordinator._is_generating is False
-
-    asyncio.run(run())
-
-
-def test_coordinator_debouncing_lock() -> None:
-    """Test async_generate_report debouncing lock rejects duplicate in-flight requests."""
-
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
-
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
-        coordinator._is_generating = True
-
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ):
         report = await coordinator.async_generate_report()
-        assert report is None
-        assert coordinator._is_generating is True
 
-    asyncio.run(run())
-
-
-def test_coordinator_missing_api_key() -> None:
-    """Test async_generate_report returns None when API key is missing."""
-
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_entry = MagicMock()
-        mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: ""}
-        mock_entry.options = {}
-
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
-        mock_storage.async_load_history = AsyncMock(return_value=[])
-
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
-        coordinator.data = GarminDailyMetrics(date="2026-08-15", steps=10000)
-
-        report = await coordinator.async_generate_report()
-        assert report is None
+        assert report is mock_report
+        assert coordinator.latest_report is mock_report
+        coordinator.async_update_listeners.assert_called_once()
         assert coordinator._is_generating is False
 
-    asyncio.run(run())
+
+@pytest.mark.asyncio
+async def test_coordinator_debouncing_lock(hass: HomeAssistant) -> None:
+    """Test async_generate_report debouncing lock rejects duplicate in-flight requests."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    coordinator._is_generating = True
+
+    report = await coordinator.async_generate_report()
+    assert report is None
+    assert coordinator._is_generating is True
 
 
-def test_coordinator_dispatch_notification_targets() -> None:
+@pytest.mark.asyncio
+async def test_coordinator_missing_api_key(hass: HomeAssistant) -> None:
+    """Test async_generate_report returns None when API key is missing."""
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: ""}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    coordinator.data = GarminDailyMetrics(date="2026-08-15", steps=10000)
+
+    report = await coordinator.async_generate_report()
+    assert report is None
+    assert coordinator._is_generating is False
+
+
+@pytest.mark.asyncio
+async def test_coordinator_dispatch_notification_targets(hass: HomeAssistant) -> None:
     """Test notification dispatch for persistent_notification, notify.<service>, empty target, and ServiceNotFound error."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
 
-    async def run() -> None:
-        mock_hass = MagicMock()
-        mock_hass.services.async_call = AsyncMock()
-        mock_entry = MagicMock()
-        mock_client = MagicMock()
-        mock_storage = MagicMock()
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
 
-        coordinator = GarminDataUpdateCoordinator(
-            mock_hass, mock_entry, mock_client, mock_storage
-        )
+    sample_report = AIHealthReport(
+        timestamp="2026-08-15T06:00:00Z",
+        short_summary="Great activity level today!",
+        full_report="# Full Daily AI Report\n\nDetailed breakdown.",
+        provider_used="gemini",
+        model_used="gemini-2.0-flash",
+    )
 
-        sample_report = AIHealthReport(
-            timestamp="2026-08-15T06:00:00Z",
-            short_summary="Great activity level today!",
-            full_report="# Full Daily AI Report\n\nDetailed breakdown.",
-            provider_used="gemini",
-            model_used="gemini-2.0-flash",
-        )
-
+    with patch(
+        "homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock
+    ) as mock_async_call:
         # 1. Empty target (disabled)
         mock_entry.data = {CONF_NOTIFICATION_TARGETS: ""}
         mock_entry.options = {}
         await coordinator.async_dispatch_notification(sample_report)
-        mock_hass.services.async_call.assert_not_called()
+        mock_async_call.assert_not_called()
 
         # 2. persistent_notification
         mock_entry.options = {CONF_NOTIFICATION_TARGETS: "persistent_notification"}
         await coordinator.async_dispatch_notification(sample_report)
-        mock_hass.services.async_call.assert_called_once_with(
+        mock_async_call.assert_called_once_with(
             "persistent_notification",
             "create",
             {
@@ -228,10 +203,10 @@ def test_coordinator_dispatch_notification_targets() -> None:
         )
 
         # 3. notify.mobile_app_phone
-        mock_hass.services.async_call.reset_mock()
+        mock_async_call.reset_mock()
         mock_entry.options = {CONF_NOTIFICATION_TARGETS: "notify.mobile_app_phone"}
         await coordinator.async_dispatch_notification(sample_report)
-        mock_hass.services.async_call.assert_called_once_with(
+        mock_async_call.assert_called_once_with(
             "notify",
             "mobile_app_phone",
             {
@@ -242,10 +217,6 @@ def test_coordinator_dispatch_notification_targets() -> None:
         )
 
         # 4. Fault tolerance on ServiceNotFound
-        mock_hass.services.async_call.side_effect = ServiceNotFound("notify", "invalid_target")
+        mock_async_call.side_effect = ServiceNotFound("notify", "invalid_target")
         await coordinator.async_dispatch_notification(sample_report)
         # Should complete gracefully without throwing
-
-    asyncio.run(run())
-
-
