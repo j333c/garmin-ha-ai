@@ -57,8 +57,34 @@ if "homeassistant" not in sys.modules:
     storage_mock.Store = MockStore
     sys.modules["homeassistant.helpers.storage"] = storage_mock
 
+    class MockUpdateFailed(Exception):
+        pass
+
+    class MockDataUpdateCoordinator:
+        def __class_getitem__(cls, item):
+            return cls
+
+        def __init__(self, hass, logger, name, update_interval=None, **kwargs):
+            self.hass = hass
+            self.logger = logger
+            self.name = name
+            self.update_interval = update_interval
+            self.data = None
+
+        async def _async_update_data(self):
+            raise NotImplementedError
+
+        async def async_config_entry_first_refresh(self):
+            self.data = await self._async_update_data()
+
+    update_coordinator_mock = MagicMock()
+    update_coordinator_mock.DataUpdateCoordinator = MockDataUpdateCoordinator
+    update_coordinator_mock.UpdateFailed = MockUpdateFailed
+    sys.modules["homeassistant.helpers.update_coordinator"] = update_coordinator_mock
+
     helpers_mock = MagicMock()
     helpers_mock.storage = storage_mock
+    helpers_mock.update_coordinator = update_coordinator_mock
     sys.modules["homeassistant.helpers"] = helpers_mock
     ha_mock.helpers = helpers_mock
 

@@ -42,7 +42,7 @@ development_status:
   1-3-garmin-client-authentication-adapter-token-lifecycle-garmin_: done
   1-4-ui-config-flow-mfa-setup-wizard-config_flow-py: done
   1-5-garmin-metric-data-ingestion-normalization: done
-  1-6-dataupdatecoordinator-scheduled-polling-engine-coordinator-p: backlog
+  1-6-dataupdatecoordinator-scheduled-polling-engine-coordinator-p: done
   1-7-native-garmin-metric-sensor-entities-sensor-py: backlog
   epic-1-retrospective: optional
 
