@@ -1,0 +1,61 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 08-15-2026 21:48
+last_updated: 08-15-2026 21:48
+project: garmin-ha-ai
+project_key: NOKEY
+tracking_system: file-system
+story_location: 
+  /home/jens/Projekte/garmin-ha-ai/_bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-custom-component-package-scaffolding-manifest-setup: backlog
+  1-2-local-storage-token-persistence-helper-storage-py: backlog
+  1-3-garmin-client-authentication-adapter-token-lifecycle-garmin_: backlog
+  1-4-ui-config-flow-mfa-setup-wizard-config_flow-py: backlog
+  1-5-garmin-metric-data-ingestion-normalization: backlog
+  1-6-dataupdatecoordinator-scheduled-polling-engine-coordinator-p: backlog
+  1-7-native-garmin-metric-sensor-entities-sensor-py: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-pluggable-ai-engine-drivers-gemini-sdk-generic-openai-httpx: backlog
+  2-2-5-block-prompt-context-assembler-prompt-py: backlog
+  2-3-ai-health-report-sensor-entities-255-char-protection-sensor: backlog
+  2-4-scheduled-report-orchestration-debounced-trigger-service-coo: backlog
+  2-5-multi-channel-fault-tolerant-notification-dispatch: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-interactive-q-a-service-registration-history-grounding-servi: backlog
+  3-2-last-answer-sensor-entity-interactive-lovelace-q-a-card-patt: backlog
+  3-3-ui-options-flow-retention-window-management-options_flow-py: backlog
+  epic-3-retrospective: optional
