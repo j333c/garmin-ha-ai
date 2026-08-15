@@ -29,15 +29,15 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-15-2026 21:48
-last_updated: 08-15-2026 21:48
+last_updated: 08-15-2026 21:53
 project: garmin-ha-ai
 project_key: NOKEY
 tracking_system: file-system
 story_location: 
   /home/jens/Projekte/garmin-ha-ai/_bmad-output/implementation-artifacts
 development_status:
-  epic-1: backlog
-  1-1-custom-component-package-scaffolding-manifest-setup: backlog
+  epic-1: in-progress
+  1-1-custom-component-package-scaffolding-manifest-setup: done
   1-2-local-storage-token-persistence-helper-storage-py: backlog
   1-3-garmin-client-authentication-adapter-token-lifecycle-garmin_: backlog
   1-4-ui-config-flow-mfa-setup-wizard-config_flow-py: backlog

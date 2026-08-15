@@ -1,0 +1,15 @@
+{
+  "domain": "garmin_ha_ai",
+  "name": "Garmin HA AI",
+  "codeowners": ["@jens"],
+  "config_flow": true,
+  "documentation": "https://github.com/jens/garmin-ha-ai",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/jens/garmin-ha-ai/issues",
+  "requirements": [
+    "garminconnect>=0.3.10",
+    "google-genai>=1.0.0",
+    "httpx>=0.27.0"
+  ],
+  "version": "1.0.0"
+}
