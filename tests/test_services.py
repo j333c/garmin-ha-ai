@@ -50,6 +50,7 @@ def mock_coordinator(mock_config_entry):
     """Mock GarminDataUpdateCoordinator."""
     coordinator = MagicMock()
     coordinator.entry = mock_config_entry
+    coordinator.async_set_latest_answer = AsyncMock()
     return coordinator
 
 
@@ -95,6 +96,9 @@ async def test_ask_question_success(
         "answer": "You should run 5km today at an easy pace.",
     }
     mock_provider.async_generate_response.assert_called_once()
+    mock_coordinator.async_set_latest_answer.assert_called_once_with(
+        "Should I run today?", "You should run 5km today at an easy pace."
+    )
 
 
 @pytest.mark.asyncio

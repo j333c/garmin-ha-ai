@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+import homeassistant.util.dt as dt_util
 
 from .ai_engine import (
     AIEngineError,
@@ -60,6 +61,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.client = client
         self.storage = storage
         self.latest_report: AIHealthReport | None = None
+        self.latest_answer: dict[str, Any] | None = None
         self._is_generating: bool = False
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
@@ -169,6 +171,15 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             return None
         finally:
             self._is_generating = False
+
+    async def async_set_latest_answer(self, question: str, answer: str) -> None:
+        """Update the latest Q&A response and notify listeners."""
+        self.latest_answer = {
+            "question": question,
+            "answer": answer,
+            "timestamp": dt_util.now().isoformat(),
+        }
+        self.async_update_listeners()
 
     async def _async_update_data(self) -> GarminDailyMetrics:
         """Fetch daily health and fitness data from Garmin Connect."""

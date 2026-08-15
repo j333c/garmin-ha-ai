@@ -114,6 +114,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 base_url=base_url,
             )
             answer_text = await provider.async_generate_response(prompt)
+            await coordinator.async_set_latest_answer(question, answer_text)
         except AIEngineError as err:
             LOGGER.error("AI Engine error during Q&A call: %s", err)
             raise HomeAssistantError(f"AI Engine error: {err}") from err

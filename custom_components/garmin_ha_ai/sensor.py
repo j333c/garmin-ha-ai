@@ -69,6 +69,7 @@ async def async_setup_entry(
     ]
     entities.append(GarminAIHealthReportShortSensor(coordinator, entry))
     entities.append(GarminAIHealthReportLongSensor(coordinator, entry))
+    entities.append(GarminAILastAnswerSensor(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -210,4 +211,53 @@ class GarminAIHealthReportLongSensor(
             "provider_used": report.provider_used,
             "model_used": report.model_used,
         }
+
+
+class GarminAILastAnswerSensor(
+    CoordinatorEntity[GarminDataUpdateCoordinator], SensorEntity
+):
+    """Last AI Q&A answer sensor entity carrying full answer Markdown in extra attributes."""
+
+    _attr_icon = "mdi:comment-question-outline"
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize last AI answer sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ai_last_answer"
+        self._attr_name = "Garmin AI Last Answer"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return truncated short answer summary guaranteed to fit within 250 characters."""
+        latest = self.coordinator.latest_answer
+        if not latest or not latest.get("answer"):
+            return "No question asked yet"
+
+        answer = str(latest["answer"]).strip()
+        if not answer:
+            return "No answer available"
+
+        # Hard truncation at 250 characters (AD-5: strictly < 255 chars)
+        if len(answer) > 250:
+            answer = answer[:247] + "..."
+
+        return answer
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes including full Markdown answer and question."""
+        latest = self.coordinator.latest_answer
+        if not latest:
+            return {}
+
+        return {
+            "full_answer": latest.get("answer", ""),
+            "question": latest.get("question", ""),
+            "timestamp": latest.get("timestamp", ""),
+        }
+
 

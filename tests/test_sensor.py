@@ -9,6 +9,7 @@ from custom_components.garmin_ha_ai.sensor import (
     SENSOR_DESCRIPTIONS,
     GarminAIHealthReportLongSensor,
     GarminAIHealthReportShortSensor,
+    GarminAILastAnswerSensor,
     GarminSensorEntity,
     async_setup_entry,
 )
@@ -32,9 +33,9 @@ def test_sensor_setup_entry() -> None:
 
         await async_setup_entry(mock_hass, mock_entry, add_entities)
 
-        # 6 metric sensors + 2 report sensors = 8 total
-        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 2
-        assert len(added_entities) == 8
+        # 6 metric sensors + 2 report sensors + 1 last answer sensor = 9 total
+        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 3
+        assert len(added_entities) == 9
 
     asyncio.run(run())
 
@@ -123,4 +124,36 @@ def test_ai_health_report_sensors() -> None:
     assert long_sensor.native_value == "Report generated (2026-08-15)"
     assert long_sensor.extra_state_attributes["full_report"] == full_markdown_report
     assert long_sensor.extra_state_attributes["model_used"] == "gemini-2.0-flash"
+
+
+def test_garmin_ai_last_answer_sensor() -> None:
+    """Test GarminAILastAnswerSensor initialization, truncation, and extra attributes."""
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_coordinator = MagicMock()
+
+    # Case 1: No question asked yet
+    mock_coordinator.latest_answer = None
+    answer_sensor = GarminAILastAnswerSensor(mock_coordinator, mock_entry)
+
+    assert answer_sensor.native_value == "No question asked yet"
+    assert answer_sensor.extra_state_attributes == {}
+
+    # Case 2: Extremely long answer (> 255 characters)
+    very_long_answer = "Answer details: " + ("X" * 300)
+    mock_coordinator.latest_answer = {
+        "question": "Should I train hard today?",
+        "answer": very_long_answer,
+        "timestamp": "2026-08-15T22:00:00Z",
+    }
+
+    # State must be strictly truncated to <= 250 characters
+    val = answer_sensor.native_value
+    assert val is not None
+    assert len(val) == 250
+    assert val.endswith("...")
+    assert answer_sensor.extra_state_attributes["full_answer"] == very_long_answer
+    assert answer_sensor.extra_state_attributes["question"] == "Should I train hard today?"
+    assert answer_sensor.extra_state_attributes["timestamp"] == "2026-08-15T22:00:00Z"
+
 
