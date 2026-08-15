@@ -50,7 +50,7 @@ development_status:
   2-1-pluggable-ai-engine-drivers-gemini-sdk-generic-openai-httpx: review
   2-2-5-block-prompt-context-assembler-prompt-py: review
   2-3-ai-health-report-sensor-entities-255-char-protection-sensor: review
-  2-4-scheduled-report-orchestration-debounced-trigger-service-coo: backlog
+  2-4-scheduled-report-orchestration-debounced-trigger-service-coo: review
   2-5-multi-channel-fault-tolerant-notification-dispatch: backlog
   epic-2-retrospective: optional
 

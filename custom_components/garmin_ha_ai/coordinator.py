@@ -18,7 +18,23 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DEFAULT_POLLING_INTERVAL_HOURS, DOMAIN, LOGGER
+from .ai_engine import (
+    AIEngineError,
+    assemble_report_prompt,
+    get_ai_provider,
+)
+from .const import (
+    CONF_AI_API_KEY,
+    CONF_AI_BASE_URL,
+    CONF_AI_MODEL,
+    CONF_AI_PROVIDER,
+    CONF_COACHING_DIRECTIVES,
+    CONF_FITNESS_GOALS,
+    DEFAULT_AI_PROVIDER,
+    DEFAULT_POLLING_INTERVAL_HOURS,
+    DOMAIN,
+    LOGGER,
+)
 from .garmin_client import GarminClient
 from .models import AIHealthReport, GarminDailyMetrics
 from .storage import GarminStorage
@@ -39,6 +55,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.client = client
         self.storage = storage
         self.latest_report: AIHealthReport | None = None
+        self._is_generating: bool = False
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 
@@ -48,6 +65,61 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             name=DOMAIN,
             update_interval=update_interval,
         )
+
+    async def async_generate_report(self, force: bool = False) -> AIHealthReport | None:
+        """Generate AI Health Report with debouncing lock."""
+        if self._is_generating:
+            LOGGER.warning("AI report generation already in progress; skipping duplicate trigger")
+            return None
+
+        self._is_generating = True
+        try:
+            metrics = self.data
+            if not metrics:
+                LOGGER.debug("No cached metrics available; fetching daily metrics from Garmin")
+                metrics = await self.client.async_fetch_daily_metrics()
+
+            history_data = await self.storage.async_load_history()
+
+            options = {**self.entry.data, **self.entry.options}
+            provider_type = options.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
+            api_key = options.get(CONF_AI_API_KEY, "")
+            model = options.get(CONF_AI_MODEL)
+            base_url = options.get(CONF_AI_BASE_URL)
+            goals = options.get(CONF_FITNESS_GOALS)
+            directives = options.get(CONF_COACHING_DIRECTIVES)
+
+            if not api_key:
+                LOGGER.warning("AI provider API key is not configured; skipping report generation")
+                return None
+
+            prompt = assemble_report_prompt(
+                current_metrics=metrics,
+                history=history_data,
+                user_goals=goals,
+                coaching_directives=directives,
+            )
+
+            provider = get_ai_provider(
+                provider_type=provider_type,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+            )
+            report = await provider.async_generate_report(prompt)
+
+            self.latest_report = report
+            self.async_update_listeners()
+            LOGGER.info("Successfully generated AI health report using provider %s", provider_type)
+            return report
+        except AIEngineError as err:
+            LOGGER.error("AI Engine error during report generation: %s", err)
+            return None
+        except Exception as err:
+            LOGGER.exception("Unexpected error during AI report generation: %s", err)
+            return None
+        finally:
+            self._is_generating = False
 
     async def _async_update_data(self) -> GarminDailyMetrics:
         """Fetch daily health and fitness data from Garmin Connect."""
@@ -59,6 +131,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 metrics.date,
                 metrics.steps,
             )
+            # Trigger background AI report generation automatically after sync
+            self.hass.async_create_task(self.async_generate_report())
             return metrics
         except ConfigEntryAuthFailed:
             LOGGER.warning("Authentication failed during Garmin background polling")
@@ -66,3 +140,4 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         except (GarminConnectConnectionError, Exception) as err:
             LOGGER.warning("Error fetching Garmin data: %s", err)
             raise UpdateFailed(f"Error fetching Garmin data: {err}") from err
+
