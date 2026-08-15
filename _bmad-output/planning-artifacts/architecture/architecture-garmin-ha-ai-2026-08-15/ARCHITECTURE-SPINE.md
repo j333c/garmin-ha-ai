@@ -64,35 +64,42 @@ companions: ['solution-design-garmin-ha-ai-2026-08-15.md']
 
 ## Invariants & Rules
 
+## Invariants & Rules
+
 ### AD-1 — Layered Adapter with DataUpdateCoordinator Strategy Pattern
 - **Binds:** `all`
 - **Prevents:** Monolithic tightly-coupled entity code, un-testable business logic, and tangled LLM client calls.
-- **Rule:** Integration components MUST be split into distinct layers: `garmin_client.py` (ingestion), `ai_engine/` (AI analysis), `storage.py` (local persistence), `coordinator.py` (orchestration), and HA platform modules (`sensor.py`, `services.py`). No direct API calls may be made inside entity classes.
+- **Rule:** Component MUST isolate responsibilities across `garmin_client.py` (ingestion), `ai_engine/` (AI analysis), `storage.py` (local persistence), `coordinator.py` (orchestration), and HA platform modules (`sensor.py`, `services.py`). No direct API calls may be made inside entity classes.
 
-### AD-2 — Local JSON Snapshot Store with Configurable Retention
+### AD-2 — Local JSON Snapshot Store with Configurable Retention & Asyncio Lock
 - **Binds:** `storage.py`, `services.py`, `options_flow.py`
-- **Prevents:** Rate-limiting by Garmin API during interactive Q&A service calls and loss of historical trend context during network outages.
-- **Rule:** Daily metrics MUST be saved locally to HA `.storage/garmin_ha_ai_history.json`. Retention defaults to 30 days and MUST be configurable by the user via Options Flow (`retention_days`). Interactive Q&A MUST query this local store for historical context rather than hitting Garmin cloud APIs.
+- **Prevents:** Rate-limiting by Garmin API during interactive Q&A service calls, store JSON write corruption during concurrent calls, and crashes on missing store files.
+- **Rule:** Daily metrics MUST be saved locally to HA `.storage/garmin_ha_ai_history.json`. All disk read/write operations MUST be guarded by an `asyncio.Lock()`. Missing history store files on clean install MUST be handled gracefully by returning an empty store dictionary. Retention defaults to 30 days and MUST be configurable by the user via Options Flow (`retention_days`). Interactive Q&A MUST query this local store for historical context rather than hitting Garmin cloud APIs.
 
 ### AD-3 — Dual Native Driver AI Engine Architecture
 - **Binds:** `ai_engine/`
-- **Prevents:** Bloating custom component dependencies with heavy frameworks like LangChain or LlamaIndex.
-- **Rule:** AI provider drivers MUST be lightweight and native. Google Gemini integration MUST use the official `google-genai` SDK. OpenAI-compatible integration MUST use `httpx` async client targeting standard `/v1/chat/completions` endpoints.
+- **Prevents:** Bloating custom component dependencies with heavy frameworks like LangChain or LlamaIndex and hanging HTTP calls on slow local models.
+- **Rule:** AI provider drivers MUST be lightweight and native. Google Gemini integration MUST use the official `google-genai` SDK. OpenAI-compatible integration MUST use `httpx` async client targeting standard `/v1/chat/completions` endpoints with configurable request timeouts (default 30 seconds). Prompt assembly in `prompt.py` MUST estimate and truncate prompt context to fit model context limits.
 
 ### AD-4 — OAuth Token Persistence & MFA Authentication Flow
 - **Binds:** `config_flow.py`, `garmin_client.py`, `storage.py`
-- **Prevents:** Storing plaintext user passwords in config files and losing login sessions across Home Assistant restarts.
-- **Rule:** Credentials MUST be authenticated via `python-garminconnect`. If an MFA challenge is returned, `config_flow` MUST transition to step `step_mfa`. On auth success, DI OAuth tokens MUST be saved to HA `.storage/garmin_ha_ai_tokens.json`. Expired access tokens MUST be refreshed silently using refresh tokens. If tokens are invalidated, the coordinator MUST raise `ConfigEntryAuthFailed` to trigger native HA re-auth UI.
+- **Prevents:** Storing plaintext user passwords in config files, losing login sessions across Home Assistant restarts, and hanging MFA login steps.
+- **Rule:** Credentials MUST be authenticated via `python-garminconnect`. If an MFA challenge is returned, `config_flow` MUST transition to step `step_mfa` (with resend/retry recovery on timeout). On auth success, DI OAuth tokens MUST be saved to HA `.storage/garmin_ha_ai_tokens.json`. Expired access tokens MUST be refreshed silently using refresh tokens. If tokens are invalidated or revoked, the coordinator MUST trigger `async_step_reauth` / raise `ConfigEntryAuthFailed` to prompt native HA UI re-authentication.
 
 ### AD-5 — Entity State Protection & Extra State Attributes for Reports
 - **Binds:** `sensor.py`, `coordinator.py`
 - **Prevents:** Home Assistant core error `InvalidStateError` caused by state string lengths exceeding HA's 255-character hard limit.
-- **Rule:** `sensor.garmin_ai_health_report_short` state MUST contain a concise summary (<255 characters). `sensor.garmin_ai_health_report_long` state MUST contain a short summary header/timestamp, while the full rich Markdown report MUST be stored in `extra_state_attributes["full_report"]`.
+- **Rule:** `sensor.garmin_ai_health_report_short` state MUST be strictly truncated in Python (`short_summary[:250] + "..."` when needed) to stay under 255 characters. `sensor.garmin_ai_health_report_long` state MUST contain a short summary header/timestamp, while the full rich Markdown report MUST be stored in `extra_state_attributes["full_report"]`.
 
-### AD-6 — Modern HA Service Response Support (`SupportsResponse.OPTIONAL`)
+### AD-6 — Modern HA Service Response Support & History Clamping (`SupportsResponse.OPTIONAL`)
 - **Binds:** `services.py`, `ai_engine/`
-- **Prevents:** Clunky asynchronous event dispatching for interactive Q&A service callers.
-- **Rule:** Service `garmin_ha_ai.ask_question` MUST register using `supports_response=SupportsResponse.OPTIONAL`. When invoked, it MUST return a dictionary `{"answer": "...", "question": "...", "context_days": N}` directly to the caller, while updating entity `sensor.garmin_ai_last_answer`.
+- **Prevents:** Clunky asynchronous event dispatching for interactive Q&A service callers and out-of-bounds history array indexing.
+- **Rule:** Service `garmin_ha_ai.ask_question` MUST register using `supports_response=SupportsResponse.OPTIONAL`. When invoked, it MUST accept `question`, `days_history` (clamped to `min(requested_days, available_stored_days)`), and an optional `response_entity`. It MUST return a dictionary `{"answer": "...", "question": "...", "context_days": N}` directly to the caller, while updating `sensor.garmin_ai_last_answer` or the target `response_entity`.
+
+### AD-7 — Debounced Report Generation & Fault-Tolerant Notification Dispatch
+- **Binds:** `coordinator.py`, `services.py`
+- **Prevents:** Redundant LLM API quota consumption from rapid manual triggers and sync pipeline crashes when notification entities are renamed or missing.
+- **Rule:** Report generation in `coordinator.py` MUST maintain an `_is_generating` boolean lock to discard rapid duplicate calls. Notification dispatch to configured targets MUST catch `ServiceNotFound` and `HomeAssistantError`, logging a warning while allowing entity state updates to complete cleanly.
 
 ### Dependency Topology Rule
 
@@ -122,7 +129,7 @@ graph TD
 | Concern | Convention |
 | --- | --- |
 | Naming | Domain `garmin_ha_ai`, snake_case Python modules, lower_snake_case HA entity IDs (`sensor.garmin_steps`, `sensor.garmin_ai_health_report_short`). |
-| Data & Formats | Dates in ISO 8601 (`YYYY-MM-DD`). Metric units standard SI (`steps`, `bpm`, `kg`, `km`, `%`). |
+| Data & Formats | Dates in ISO 8601 (`YYYY-MM-DD`). Target dates aligned to `hass.config.time_zone`. Metric units standard SI (`steps`, `bpm`, `kg`, `km`, `%`). |
 | State & Mutation | State updates handled strictly via `GarminDataUpdateCoordinator`. Service calls trigger async AI tasks. |
 | Error Handling | Ingestion errors raise `UpdateFailed`. Auth failure raises `ConfigEntryAuthFailed`. LLM timeouts retry up to 2 times with exponential backoff. |
 
@@ -171,17 +178,17 @@ custom_components/garmin_ha_ai/
 @dataclass
 class GarminDailyMetrics:
     date: str  # YYYY-MM-DD
-    steps: int
-    distance_meters: float
-    calories: int
-    resting_hr: int
-    avg_stress: int
-    sleep_score: int
-    body_battery_min: int
-    body_battery_max: int
-    hrv_status: str
-    weight_kg: float | None
-    activities: list[dict]
+    steps: int | None = None
+    distance_meters: float | None = None
+    calories: int | None = None
+    resting_hr: int | None = None
+    avg_stress: int | None = None
+    sleep_score: int | None = None
+    body_battery_min: int | None = None
+    body_battery_max: int | None = None
+    hrv_status: str | None = None
+    weight_kg: float | None = None
+    activities: list[dict] = field(default_factory=list)
 
 @dataclass
 class AIHealthReport:

@@ -125,7 +125,7 @@ System MUST handle AI API timeout or quota errors with up to 2 retries before ma
 ---
 
 ### 4.3 Home Assistant Integration & Entities
-**Description:** Exposes native Home Assistant sensors and entities. Realizes UJ-1, UJ-2.
+**Description:** Exposes native Home Assistant sensors and entities. Realizes UJ-1, UJ-2. (Canonical machine contract: `SPEC.md:CAP-6`).
 
 #### FR-9: Garmin Metrics Sensors
 System MUST create Home Assistant sensor entities for key Garmin metrics: `sensor.garmin_steps`, `sensor.garmin_resting_hr`, `sensor.garmin_sleep_score`, `sensor.garmin_stress_level`, `sensor.garmin_weight`, `sensor.garmin_body_battery`.
@@ -133,9 +133,9 @@ System MUST create Home Assistant sensor entities for key Garmin metrics: `senso
   - Entities appear in HA Entity Registry with correct state, units (`steps`, `bpm`, `kg`, `%`), and `state_class`.
 
 #### FR-10: AI Report Sensor Entities
-System MUST create `sensor.garmin_ai_health_report_short` (concise 1-2 sentence dashboard text) and `sensor.garmin_ai_health_report_long` (full markdown report stored in state or attribute `full_report`). Realizes UJ-2.
+System MUST create `sensor.garmin_ai_health_report_short` (concise 1-2 sentence dashboard text strictly truncated to <255 chars in Python) and `sensor.garmin_ai_health_report_long` (full markdown report stored in `extra_state_attributes["full_report"]`). Realizes UJ-2.
 - **Consequences (testable)**:
-  - Dashboard text cards render short report cleanly without truncation.
+  - Dashboard text cards render short report cleanly without truncation or HA 255-character `InvalidStateError`.
 
 #### FR-11: Integration Status & Last Sync Sensor
 System MUST maintain `sensor.garmin_ai_last_update` showing timestamp of last successful Garmin sync and AI report generation.
@@ -147,15 +147,15 @@ System MUST maintain `sensor.garmin_ai_last_update` showing timestamp of last su
 ### 4.4 Automated Report Generation & Multi-Channel Delivery
 **Description:** Triggers scheduled report generation and dispatches reports to configured notification channels. Realizes UJ-2.
 
-#### FR-12: Multi-Channel Dispatch
-System MUST support dispatching generated reports to configured Home Assistant notification targets (e.g. `notify.mobile_app_phone`, persistent notification, or email service `notify.email`). `[ASSUMPTION: Default delivery is dashboard entities + optional push notification].`
+#### FR-12: Multi-Channel Fault-Tolerant Dispatch
+System MUST support dispatching generated reports to configured Home Assistant notification targets (e.g. `notify.mobile_app_phone`, persistent notification, or email service `notify.email`). Notification failures (`ServiceNotFound` or `HomeAssistantError`) MUST be trapped as logged warnings without breaking entity state updates. `[ASSUMPTION: Default delivery is dashboard entities + optional push notification].`
 - **Consequences (testable)**:
-  - When enabled, service call to configured notify target is executed with short/long report payload.
+  - When enabled, service call to configured notify target is executed with short/long report payload, protecting sync pipeline on missing/renamed targets.
 
-#### FR-13: Manual Report Trigger Service
-System MUST expose service `garmin_ha_ai.generate_report` to allow manual execution from Lovelace buttons, automations, or scripts.
+#### FR-13: Manual Report Trigger Service & Debouncing
+System MUST expose service `garmin_ha_ai.generate_report` to allow manual execution from Lovelace buttons, automations, or scripts, protected by an in-flight debouncing lock `_is_generating`.
 - **Consequences (testable)**:
-  - Calling `garmin_ha_ai.generate_report` immediately executes sync + LLM report generation.
+  - Calling `garmin_ha_ai.generate_report` immediately executes sync + LLM report generation, discarding rapid redundant clicks.
 
 ---
 
@@ -163,24 +163,24 @@ System MUST expose service `garmin_ha_ai.generate_report` to allow manual execut
 **Description:** Allows on-demand interactive health queries with automatic Garmin data grounding. Realizes UJ-3.
 
 #### FR-14: Service `garmin_ha_ai.ask_question`
-System MUST register service `garmin_ha_ai.ask_question` accepting parameters: `question` (string, required), `days_history` (int, default 7), and `response_entity` (optional). Realizes UJ-3.
+System MUST register service `garmin_ha_ai.ask_question` accepting parameters: `question` (string, required), `days_history` (int, default 7, clamped to available history), and optional `response_entity` (target sensor entity ID to store the answer). Realizes UJ-3.
 - **Consequences (testable)**:
-  - Calling service returns response text in service response data and updates `sensor.garmin_ai_last_answer`.
+  - Calling service returns response text in service response data (`SupportsResponse.OPTIONAL`) and updates `sensor.garmin_ai_last_answer` (or specified `response_entity`).
 
 #### FR-15: History Injection into Q&A Prompt
-System MUST automatically fetch the past N days (`days_history`) of cached Garmin metrics and append them to the system prompt before invoking the LLM. Realizes UJ-3.
+System MUST automatically fetch the past N days (`days_history`) of cached Garmin metrics from local store (guarded by `asyncio.Lock()`) and append them to the system prompt before invoking the LLM. Realizes UJ-3.
 - **Consequences (testable)**:
-  - LLM receives structured historical context alongside the user's question.
+  - LLM receives structured historical context alongside the user's question without hitting Garmin cloud APIs.
 
 ---
 
 ### 4.6 Configuration & Options Management
 **Description:** UI-based setup and runtime configuration. Realizes UJ-1.
 
-#### FR-16: UI Config Flow Setup
-System MUST provide UI Config Flow (`config_flow.py`) for initial setup: Garmin Credentials (email, password, MFA code), AI Provider Selection (Gemini vs Custom OpenAI), API Key, and Initial Goals. Realizes UJ-1.
+#### FR-16: UI Config Flow Setup & MFA Timeout Recovery
+System MUST provide UI Config Flow (`config_flow.py`) for initial setup: Garmin Credentials (email, password, MFA code), AI Provider Selection (Gemini vs Custom OpenAI), API Key, and Initial Goals. If the Garmin MFA challenge times out or fails, the form MUST provide explicit retry/resend options. Realizes UJ-1.
 - **Consequences (testable)**:
-  - User can complete full setup through HA UI without editing `configuration.yaml`.
+  - User can complete full setup through HA UI without editing `configuration.yaml` or locking up on expired MFA PINs.
 
 #### FR-17: UI Options Flow Updates
 System MUST provide UI Options Flow (`options_flow`) to allow updating goals, AI focus directives, sync schedules, and notification targets post-installation without re-entering credentials.
