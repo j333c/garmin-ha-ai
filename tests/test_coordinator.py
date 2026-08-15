@@ -6,10 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.garmin_ha_ai.const import CONF_AI_API_KEY, CONF_AI_PROVIDER
+from custom_components.garmin_ha_ai.const import (
+    CONF_AI_API_KEY,
+    CONF_AI_PROVIDER,
+    CONF_NOTIFICATION_TARGETS,
+)
 from custom_components.garmin_ha_ai.coordinator import GarminDataUpdateCoordinator
 from custom_components.garmin_ha_ai.models import AIHealthReport, GarminDailyMetrics
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceNotFound
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 
@@ -180,4 +184,68 @@ def test_coordinator_missing_api_key() -> None:
         assert coordinator._is_generating is False
 
     asyncio.run(run())
+
+
+def test_coordinator_dispatch_notification_targets() -> None:
+    """Test notification dispatch for persistent_notification, notify.<service>, empty target, and ServiceNotFound error."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+        mock_hass.services.async_call = AsyncMock()
+        mock_entry = MagicMock()
+        mock_client = MagicMock()
+        mock_storage = MagicMock()
+
+        coordinator = GarminDataUpdateCoordinator(
+            mock_hass, mock_entry, mock_client, mock_storage
+        )
+
+        sample_report = AIHealthReport(
+            timestamp="2026-08-15T06:00:00Z",
+            short_summary="Great activity level today!",
+            full_report="# Full Daily AI Report\n\nDetailed breakdown.",
+            provider_used="gemini",
+            model_used="gemini-2.0-flash",
+        )
+
+        # 1. Empty target (disabled)
+        mock_entry.data = {CONF_NOTIFICATION_TARGETS: ""}
+        mock_entry.options = {}
+        await coordinator.async_dispatch_notification(sample_report)
+        mock_hass.services.async_call.assert_not_called()
+
+        # 2. persistent_notification
+        mock_entry.options = {CONF_NOTIFICATION_TARGETS: "persistent_notification"}
+        await coordinator.async_dispatch_notification(sample_report)
+        mock_hass.services.async_call.assert_called_once_with(
+            "persistent_notification",
+            "create",
+            {
+                "title": "Garmin AI Daily Report",
+                "message": "# Full Daily AI Report\n\nDetailed breakdown.",
+                "notification_id": "garmin_ai_daily_report",
+            },
+        )
+
+        # 3. notify.mobile_app_phone
+        mock_hass.services.async_call.reset_mock()
+        mock_entry.options = {CONF_NOTIFICATION_TARGETS: "notify.mobile_app_phone"}
+        await coordinator.async_dispatch_notification(sample_report)
+        mock_hass.services.async_call.assert_called_once_with(
+            "notify",
+            "mobile_app_phone",
+            {
+                "title": "Garmin AI Daily Report",
+                "message": "Great activity level today!",
+                "data": {"long_message": "# Full Daily AI Report\n\nDetailed breakdown."},
+            },
+        )
+
+        # 4. Fault tolerance on ServiceNotFound
+        mock_hass.services.async_call.side_effect = ServiceNotFound("notify", "invalid_target")
+        await coordinator.async_dispatch_notification(sample_report)
+        # Should complete gracefully without throwing
+
+    asyncio.run(run())
+
 
