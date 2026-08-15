@@ -77,14 +77,56 @@ if "homeassistant" not in sys.modules:
         async def async_config_entry_first_refresh(self):
             self.data = await self._async_update_data()
 
+    class MockCoordinatorEntity:
+        def __class_getitem__(cls, item):
+            return cls
+
+        def __init__(self, coordinator):
+            self.coordinator = coordinator
+
     update_coordinator_mock = MagicMock()
     update_coordinator_mock.DataUpdateCoordinator = MockDataUpdateCoordinator
+    update_coordinator_mock.CoordinatorEntity = MockCoordinatorEntity
     update_coordinator_mock.UpdateFailed = MockUpdateFailed
     sys.modules["homeassistant.helpers.update_coordinator"] = update_coordinator_mock
+
+    class MockSensorEntity:
+        def __init__(self):
+            pass
+
+    class MockSensorEntityDescription:
+        def __init__(
+            self,
+            key,
+            name=None,
+            native_unit_of_measurement=None,
+            device_class=None,
+            state_class=None,
+            icon=None,
+        ):
+            self.key = key
+            self.name = name
+            self.native_unit_of_measurement = native_unit_of_measurement
+            self.device_class = device_class
+            self.state_class = state_class
+            self.icon = icon
+
+    components_mock = MagicMock()
+    sensor_mock = MagicMock()
+    sensor_mock.SensorEntity = MockSensorEntity
+    sensor_mock.SensorEntityDescription = MockSensorEntityDescription
+    components_mock.sensor = sensor_mock
+    sys.modules["homeassistant.components"] = components_mock
+    sys.modules["homeassistant.components.sensor"] = sensor_mock
+    ha_mock.components = components_mock
+
+    entity_platform_mock = MagicMock()
+    sys.modules["homeassistant.helpers.entity_platform"] = entity_platform_mock
 
     helpers_mock = MagicMock()
     helpers_mock.storage = storage_mock
     helpers_mock.update_coordinator = update_coordinator_mock
+    helpers_mock.entity_platform = entity_platform_mock
     sys.modules["homeassistant.helpers"] = helpers_mock
     ha_mock.helpers = helpers_mock
 
