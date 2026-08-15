@@ -1,0 +1,188 @@
+"""Unit tests for the AI Engine drivers package."""
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
+
+from custom_components.garmin_ha_ai.ai_engine import (
+    AIEngineError,
+    AIEngineQuotaError,
+    AIEngineTimeoutError,
+    BaseAIProvider,
+    GeminiProvider,
+    OpenAIProvider,
+    get_ai_provider,
+)
+from custom_components.garmin_ha_ai.ai_engine.base import async_with_retry
+from custom_components.garmin_ha_ai.models import AIHealthReport
+
+
+def test_ai_health_report_dataclass() -> None:
+    """Test AIHealthReport dataclass instantiation and dictionary conversion."""
+    report = AIHealthReport(
+        timestamp="2026-08-15T12:00:00Z",
+        short_summary="Great workout today! Focus on recovery tonight.",
+        full_report="# Daily Health Briefing\n\nYour sleep score was 85...",
+        provider_used="gemini",
+        model_used="gemini-2.0-flash",
+    )
+    assert report.provider_used == "gemini"
+    assert report.model_used == "gemini-2.0-flash"
+    report_dict = report.to_dict()
+    assert report_dict["short_summary"] == "Great workout today! Focus on recovery tonight."
+    assert report_dict["provider_used"] == "gemini"
+
+
+def test_get_ai_provider_factory() -> None:
+    """Test get_ai_provider factory function instantiation and defaults."""
+    gemini = get_ai_provider("gemini", api_key="test_key")
+    assert isinstance(gemini, GeminiProvider)
+    assert gemini.model == "gemini-2.0-flash"
+
+    openai = get_ai_provider("openai", api_key="test_key")
+    assert isinstance(openai, OpenAIProvider)
+    assert openai.model == "gpt-4o"
+    assert openai.base_url == "https://api.openai.com/v1"
+
+    custom_openai = get_ai_provider(
+        "openai",
+        api_key="test_key",
+        model="local-model",
+        base_url="http://localhost:11434/v1/",
+    )
+    assert isinstance(custom_openai, OpenAIProvider)
+    assert custom_openai.model == "local-model"
+    assert custom_openai.base_url == "http://localhost:11434/v1"
+
+    with pytest.raises(ValueError, match="Unsupported AI provider type"):
+        get_ai_provider("unsupported_provider", api_key="test_key")
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_success() -> None:
+    """Test GeminiProvider async generation happy path."""
+    with patch("custom_components.garmin_ha_ai.ai_engine.gemini.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_aio_models = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "Gemini generated report content"
+
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
+        mock_client.aio.models = mock_aio_models
+        mock_client_cls.return_value = mock_client
+
+        provider = GeminiProvider(api_key="fake_key", model="gemini-2.0-flash")
+        result = await provider.async_generate_response(
+            prompt="Analyze my stats", system_instruction="You are a health coach"
+        )
+
+        assert result == "Gemini generated report content"
+        mock_aio_models.generate_content.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_quota_error() -> None:
+    """Test GeminiProvider maps API 429 error to AIEngineQuotaError without retry."""
+    with patch("custom_components.garmin_ha_ai.ai_engine.gemini.genai.Client") as mock_client_cls:
+        from google.genai import errors as genai_errors
+
+        mock_client = MagicMock()
+        mock_aio_models = MagicMock()
+
+        api_error = genai_errors.APIError(429, "RESOURCE_EXHAUSTED", None)
+        mock_aio_models.generate_content = AsyncMock(side_effect=api_error)
+        mock_client.aio.models = mock_aio_models
+        mock_client_cls.return_value = mock_client
+
+        provider = GeminiProvider(api_key="fake_key")
+        with pytest.raises(AIEngineQuotaError):
+            await provider.async_generate_response("Test prompt")
+
+        # Quota errors fail immediately without retry
+        assert mock_aio_models.generate_content.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_success() -> None:
+    """Test OpenAIProvider async generation happy path via HTTP POST."""
+    provider = OpenAIProvider(
+        api_key="fake_openai_key",
+        model="gpt-4o",
+        base_url="https://api.openai.com/v1",
+    )
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "OpenAI generated coaching response"}}]
+    }
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        result = await provider.async_generate_response(
+            prompt="My steps today: 10000", system_instruction="Be concise"
+        )
+
+        assert result == "OpenAI generated coaching response"
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        assert args[0] == "https://api.openai.com/v1/chat/completions"
+        assert kwargs["headers"]["Authorization"] == "Bearer fake_openai_key"
+        assert kwargs["json"]["messages"][0] == {"role": "system", "content": "Be concise"}
+        assert kwargs["json"]["messages"][1] == {"role": "user", "content": "My steps today: 10000"}
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_quota_error() -> None:
+    """Test OpenAIProvider HTTP 429 quota error mapping."""
+    provider = OpenAIProvider(api_key="fake_openai_key")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.text = "Quota exceeded"
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        with pytest.raises(AIEngineQuotaError, match="quota exceeded"):
+            await provider.async_generate_response("Test prompt")
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_timeout_and_retry() -> None:
+    """Test OpenAIProvider retry backoff on HTTP timeouts."""
+    provider = OpenAIProvider(api_key="fake_openai_key")
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.side_effect = httpx.TimeoutException("Connection timed out")
+
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(AIEngineTimeoutError):
+                await provider.async_generate_response("Test prompt")
+
+            # Initial call + 2 retries = 3 calls total
+            assert mock_post.call_count == 3
+            assert mock_sleep.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_retry_helper_success_on_retry() -> None:
+    """Test async_with_retry helper succeeds on retry after initial failure."""
+    calls = 0
+
+    async def transient_func() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise AIEngineError("Transient error")
+        return "success"
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        result = await async_with_retry(
+            transient_func, max_retries=2, retry_exceptions=(AIEngineError,)
+        )
+        assert result == "success"
+        assert calls == 2

@@ -25,3 +25,19 @@ class GarminDailyMetrics:
     def to_dict(self) -> dict[str, Any]:
         """Convert metrics dataclass to dictionary representation."""
         return asdict(self)
+
+
+@dataclass
+class AIHealthReport:
+    """Class representing generated AI health reports and summaries."""
+
+    timestamp: str
+    short_summary: str
+    full_report: str
+    provider_used: str
+    model_used: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert health report dataclass to dictionary representation."""
+        return asdict(self)
+

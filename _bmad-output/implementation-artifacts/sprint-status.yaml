@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-15-2026 21:48
-last_updated: 08-15-2026 22:04
+last_updated: 08-15-2026 22:22
 project: garmin-ha-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -46,8 +46,8 @@ development_status:
   1-7-native-garmin-metric-sensor-entities-sensor-py: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-pluggable-ai-engine-drivers-gemini-sdk-generic-openai-httpx: backlog
+  epic-2: in-progress
+  2-1-pluggable-ai-engine-drivers-gemini-sdk-generic-openai-httpx: review
   2-2-5-block-prompt-context-assembler-prompt-py: backlog
   2-3-ai-health-report-sensor-entities-255-char-protection-sensor: backlog
   2-4-scheduled-report-orchestration-debounced-trigger-service-coo: backlog
