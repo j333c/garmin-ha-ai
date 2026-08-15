@@ -4,16 +4,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from custom_components.garmin_ha_ai.models import GarminDailyMetrics
+from custom_components.garmin_ha_ai.models import AIHealthReport, GarminDailyMetrics
 from custom_components.garmin_ha_ai.sensor import (
     SENSOR_DESCRIPTIONS,
+    GarminAIHealthReportLongSensor,
+    GarminAIHealthReportShortSensor,
     GarminSensorEntity,
     async_setup_entry,
 )
 
 
 def test_sensor_setup_entry() -> None:
-    """Test sensor async_setup_entry registers all sensor entities."""
+    """Test sensor async_setup_entry registers metric and report sensor entities."""
 
     async def run() -> None:
         mock_hass = MagicMock()
@@ -30,8 +32,9 @@ def test_sensor_setup_entry() -> None:
 
         await async_setup_entry(mock_hass, mock_entry, add_entities)
 
-        assert len(added_entities) == len(SENSOR_DESCRIPTIONS)
-        assert len(added_entities) == 6
+        # 6 metric sensors + 2 report sensors = 8 total
+        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 2
+        assert len(added_entities) == 8
 
     asyncio.run(run())
 
@@ -79,3 +82,45 @@ def test_sensor_entity_state_and_attributes() -> None:
     mock_coordinator.data = None
     assert steps_entity.native_value is None
     assert steps_entity.extra_state_attributes == {}
+
+
+def test_ai_health_report_sensors() -> None:
+    """Test short and long AI Health Report sensors and 255-character protection."""
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_coordinator = MagicMock()
+
+    # Case 1: No report generated yet
+    mock_coordinator.latest_report = None
+    short_sensor = GarminAIHealthReportShortSensor(mock_coordinator, mock_entry)
+    long_sensor = GarminAIHealthReportLongSensor(mock_coordinator, mock_entry)
+
+    assert short_sensor.native_value == "No report generated yet"
+    assert short_sensor.extra_state_attributes == {}
+    assert long_sensor.native_value == "No report generated yet"
+    assert long_sensor.extra_state_attributes == {}
+
+    # Case 2: Extremely long report summary (> 255 chars)
+    very_long_summary = "A" * 400
+    full_markdown_report = "# Daily Health Report\n\n" + ("Detailed analysis text.\n" * 50)
+    sample_report = AIHealthReport(
+        timestamp="2026-08-15T06:00:00Z",
+        short_summary=very_long_summary,
+        full_report=full_markdown_report,
+        provider_used="gemini",
+        model_used="gemini-2.0-flash",
+    )
+    mock_coordinator.latest_report = sample_report
+
+    # Short sensor MUST be strictly truncated to <= 250 characters
+    short_val = short_sensor.native_value
+    assert short_val is not None
+    assert len(short_val) == 250
+    assert short_val.endswith("...")
+    assert short_sensor.extra_state_attributes["provider_used"] == "gemini"
+
+    # Long sensor carries status in state and full markdown in extra attributes
+    assert long_sensor.native_value == "Report generated (2026-08-15)"
+    assert long_sensor.extra_state_attributes["full_report"] == full_markdown_report
+    assert long_sensor.extra_state_attributes["model_used"] == "gemini-2.0-flash"
+

@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import (
 
 from .const import DEFAULT_POLLING_INTERVAL_HOURS, DOMAIN, LOGGER
 from .garmin_client import GarminClient
-from .models import GarminDailyMetrics
+from .models import AIHealthReport, GarminDailyMetrics
 from .storage import GarminStorage
 
 
@@ -38,6 +38,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.entry = entry
         self.client = client
         self.storage = storage
+        self.latest_report: AIHealthReport | None = None
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 

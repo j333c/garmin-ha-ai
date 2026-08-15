@@ -63,10 +63,12 @@ async def async_setup_entry(
     """Set up Garmin HA AI sensor entities from a config entry."""
     coordinator: GarminDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
-    entities = [
+    entities: list[SensorEntity] = [
         GarminSensorEntity(coordinator, description, entry)
         for description in SENSOR_DESCRIPTIONS
     ]
+    entities.append(GarminAIHealthReportShortSensor(coordinator, entry))
+    entities.append(GarminAIHealthReportLongSensor(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -117,3 +119,95 @@ class GarminSensorEntity(CoordinatorEntity[GarminDataUpdateCoordinator], SensorE
             }
 
         return {}
+
+
+class GarminAIHealthReportShortSensor(
+    CoordinatorEntity[GarminDataUpdateCoordinator], SensorEntity
+):
+    """Short summary AI Health Report sensor entity with 255-character state protection."""
+
+    _attr_icon = "mdi:brain"
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize short AI health report sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ai_health_report_short"
+        self._attr_name = "Garmin AI Health Report Short"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return truncated short report summary guaranteed to fit within 250 characters."""
+        report = self.coordinator.latest_report
+        if not report:
+            return "No report generated yet"
+
+        summary = (report.short_summary or "").strip()
+        if not summary:
+            summary = "No summary available"
+
+        # Hard truncation at 250 characters (AD-5: strictly < 255 chars)
+        if len(summary) > 250:
+            summary = summary[:247] + "..."
+
+        return summary
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        report = self.coordinator.latest_report
+        if not report:
+            return {}
+
+        return {
+            "timestamp": report.timestamp,
+            "provider_used": report.provider_used,
+            "model_used": report.model_used,
+        }
+
+
+class GarminAIHealthReportLongSensor(
+    CoordinatorEntity[GarminDataUpdateCoordinator], SensorEntity
+):
+    """Full AI Health Report sensor carrying full Markdown in extra attributes."""
+
+    _attr_icon = "mdi:file-document-outline"
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize long AI health report sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ai_health_report_long"
+        self._attr_name = "Garmin AI Health Report Long"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return brief status line as native state."""
+        report = self.coordinator.latest_report
+        if not report:
+            return "No report generated yet"
+
+        date_str = report.timestamp[:10] if report.timestamp else "Available"
+        return f"Report generated ({date_str})"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return full Markdown report in extra state attributes."""
+        report = self.coordinator.latest_report
+        if not report:
+            return {}
+
+        return {
+            "full_report": report.full_report,
+            "short_summary": report.short_summary,
+            "timestamp": report.timestamp,
+            "provider_used": report.provider_used,
+            "model_used": report.model_used,
+        }
+
