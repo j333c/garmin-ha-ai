@@ -82,32 +82,29 @@ class GarminStorage:
     async def async_prune_history(self, retention_days: int) -> None:
         """Prune metric history entries older than retention_days."""
         from datetime import datetime, timedelta, timezone
-        from unittest.mock import MagicMock
-        import homeassistant.util.dt as dt_util
 
         async with self._history_lock:
             history = await self._history_store.async_load()
             if not history or not isinstance(history, dict):
                 return
 
-            now = dt_util.now()
-            today = None
-            if hasattr(now, "date") and not isinstance(now, MagicMock):
-                try:
-                    res = now.date()
-                    if not isinstance(res, MagicMock):
-                        today = res
-                except Exception:
-                    pass
+            days = int(retention_days) if retention_days else 30
+            cutoff = None
+            try:
+                import homeassistant.util.dt as dt_util
+                now = dt_util.now()
+                if isinstance(getattr(now, "year", None), int) and hasattr(now, "date"):
+                    cutoff = (now.date() - timedelta(days=days)).strftime("%Y-%m-%d")
+            except Exception:
+                pass
 
-            if today is None or not hasattr(today, "strftime") or isinstance(today, MagicMock):
-                today = datetime.now(timezone.utc).date()
+            if not cutoff or not isinstance(cutoff, str):
+                cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-            cutoff = (today - timedelta(days=retention_days)).strftime("%Y-%m-%d")
             pruned_history = {
                 date_str: metrics
                 for date_str, metrics in history.items()
-                if date_str >= cutoff
+                if isinstance(date_str, str) and date_str >= cutoff
             }
             if len(pruned_history) != len(history):
                 await self._history_store.async_save(pruned_history)

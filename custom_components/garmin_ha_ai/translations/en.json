@@ -38,5 +38,24 @@
       "already_configured": "Garmin account is already configured.",
       "reauth_successful": "Re-authentication was successful."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Garmin HA AI Options",
+        "description": "Adjust fitness goals, coaching directives, retention window, and AI parameters.",
+        "data": {
+          "retention_days": "Metric History Retention (Days)",
+          "fitness_goals": "Fitness & Health Goals",
+          "coaching_directives": "AI Coaching Directives & Tone",
+          "notification_targets": "Notification Target Services (comma-separated)",
+          "polling_schedule": "Daily Polling Schedule (HH:MM:SS)",
+          "ai_provider": "AI Provider",
+          "ai_api_key": "AI API Key",
+          "ai_model": "AI Model Name",
+          "ai_base_url": "AI Base URL (for generic OpenAI/local endpoints)"
+        }
+      }
+    }
   }
 }

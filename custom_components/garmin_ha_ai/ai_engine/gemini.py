@@ -1,6 +1,7 @@
 """Google Gemini AI Engine Provider implementation."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -46,10 +47,13 @@ class GeminiProvider(BaseAIProvider):
                 )
 
             try:
-                response = await self._client.aio.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=config,
+                response = await asyncio.wait_for(
+                    self._client.aio.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=30.0,
                 )
                 if not response.text:
                     raise AIEngineError("Gemini API returned empty response text")
@@ -62,7 +66,7 @@ class GeminiProvider(BaseAIProvider):
                 if code in (500, 502, 503, 504) or "503" in message or "500" in message:
                     raise AIEngineError(f"Gemini API server error ({code}): {message}") from err
                 raise AIEngineError(f"Gemini API error: {message}") from err
-            except TimeoutError as err:
+            except (TimeoutError, asyncio.TimeoutError) as err:
                 raise AIEngineTimeoutError("Gemini API request timed out") from err
             except Exception as err:
                 if isinstance(err, (AIEngineError, AIEngineQuotaError, AIEngineTimeoutError)):

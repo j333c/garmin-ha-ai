@@ -73,10 +73,12 @@ class OpenAIProvider(BaseAIProvider):
 
                 data = response.json()
                 choices = data.get("choices")
-                if not choices or not choices[0].get("message", {}).get("content"):
+                first_choice = choices[0] if (choices and isinstance(choices, list)) else {}
+                msg_content = (first_choice.get("message") or {}).get("content")
+                if not msg_content:
                     raise AIEngineError("OpenAI API response choices were empty or missing content")
 
-                return data["choices"][0]["message"]["content"]
+                return msg_content
 
             except httpx.TimeoutException as err:
                 raise AIEngineTimeoutError("OpenAI API request timed out") from err

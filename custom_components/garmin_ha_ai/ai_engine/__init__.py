@@ -13,7 +13,12 @@ from ..const import (
 from .base import AIEngineError, AIEngineQuotaError, AIEngineTimeoutError, BaseAIProvider
 from .gemini import GeminiProvider
 from .openai import OpenAIProvider
-from .prompt import assemble_qa_prompt, assemble_report_prompt, truncate_history_context
+from .prompt import (
+    assemble_qa_prompt,
+    assemble_report_prompt,
+    parse_ai_health_report,
+    truncate_history_context,
+)
 
 __all__ = [
     "BaseAIProvider",
@@ -25,6 +30,7 @@ __all__ = [
     "get_ai_provider",
     "assemble_report_prompt",
     "assemble_qa_prompt",
+    "parse_ai_health_report",
     "truncate_history_context",
 ]
 

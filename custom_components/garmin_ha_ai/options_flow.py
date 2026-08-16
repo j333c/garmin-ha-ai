@@ -10,16 +10,23 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
+    CONF_AI_API_KEY,
+    CONF_AI_BASE_URL,
+    CONF_AI_MODEL,
+    CONF_AI_PROVIDER,
     CONF_COACHING_DIRECTIVES,
     CONF_FITNESS_GOALS,
     CONF_NOTIFICATION_TARGETS,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
+    DEFAULT_AI_PROVIDER,
     DEFAULT_POLLING_TIME,
     DEFAULT_RETENTION_DAYS,
     LOGGER,
     MAX_RETENTION_DAYS,
     MIN_RETENTION_DAYS,
+    PROVIDER_GEMINI,
+    PROVIDER_OPENAI,
 )
 from .storage import GarminStorage
 
@@ -33,7 +40,6 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         if config_entry is not None:
             self.config_entry = config_entry
             self.handler = config_entry.entry_id
-
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -73,7 +79,10 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                 ): str,
                 vol.Optional(
                     CONF_COACHING_DIRECTIVES,
-                    default=current_options.get(CONF_COACHING_DIRECTIVES, ""),
+                    default=current_options.get(
+                        CONF_COACHING_DIRECTIVES,
+                        current_data.get(CONF_COACHING_DIRECTIVES, ""),
+                    ),
                 ): str,
                 vol.Optional(
                     CONF_NOTIFICATION_TARGETS,
@@ -83,6 +92,31 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_POLLING_SCHEDULE,
                     default=current_options.get(
                         CONF_POLLING_SCHEDULE, DEFAULT_POLLING_TIME
+                    ),
+                ): str,
+                vol.Optional(
+                    CONF_AI_PROVIDER,
+                    default=current_options.get(
+                        CONF_AI_PROVIDER,
+                        current_data.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER),
+                    ),
+                ): vol.In([PROVIDER_GEMINI, PROVIDER_OPENAI]),
+                vol.Optional(
+                    CONF_AI_API_KEY,
+                    default=current_options.get(
+                        CONF_AI_API_KEY, current_data.get(CONF_AI_API_KEY, "")
+                    ),
+                ): str,
+                vol.Optional(
+                    CONF_AI_MODEL,
+                    default=current_options.get(
+                        CONF_AI_MODEL, current_data.get(CONF_AI_MODEL, "")
+                    ),
+                ): str,
+                vol.Optional(
+                    CONF_AI_BASE_URL,
+                    default=current_options.get(
+                        CONF_AI_BASE_URL, current_data.get(CONF_AI_BASE_URL, "")
                     ),
                 ): str,
             }

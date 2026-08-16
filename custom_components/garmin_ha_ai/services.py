@@ -106,6 +106,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coaching_directives=directives,
         )
 
+        response_entity = call.data.get("response_entity")
+
         try:
             provider = get_ai_provider(
                 provider_type=provider_type,
@@ -115,6 +117,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
             answer_text = await provider.async_generate_response(prompt)
             await coordinator.async_set_latest_answer(question, answer_text)
+
+            if response_entity:
+                short_val = answer_text[:247] + "..." if len(answer_text) > 250 else answer_text
+                hass.states.async_set(
+                    response_entity,
+                    short_val,
+                    {
+                        "full_answer": answer_text,
+                        "question": question,
+                        "context_days": len(history_list),
+                    },
+                )
         except AIEngineError as err:
             LOGGER.error("AI Engine error during Q&A call: %s", err)
             raise HomeAssistantError(f"AI Engine error: {err}") from err
@@ -125,6 +139,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         return {
             "answer": answer_text,
             "question": question,
+            "context_days": len(history_list),
         }
 
     if not hass.services.has_service(DOMAIN, SERVICE_GENERATE_REPORT):

@@ -91,6 +91,7 @@ async def async_setup_entry(
     entities.append(GarminAIHealthReportShortSensor(coordinator, entry))
     entities.append(GarminAIHealthReportLongSensor(coordinator, entry))
     entities.append(GarminAILastAnswerSensor(coordinator, entry))
+    entities.append(GarminAILastUpdateSensor(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -285,5 +286,31 @@ class GarminAILastAnswerSensor(
             "question": latest.get("question", ""),
             "timestamp": latest.get("timestamp", ""),
         }
+
+
+class GarminAILastUpdateSensor(
+    CoordinatorEntity[GarminDataUpdateCoordinator], SensorEntity
+):
+    """Timestamp sensor indicating the last successful sync and update."""
+
+    _attr_icon = "mdi:clock-check-outline"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize last update sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ai_last_update"
+        self._attr_name = "Garmin AI Last Update"
+        self._attr_device_info = _get_device_info(entry)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the timestamp of the last successful update."""
+        return getattr(self.coordinator, "last_update_time", None)
+
 
 

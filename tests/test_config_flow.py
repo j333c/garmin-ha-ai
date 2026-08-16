@@ -212,3 +212,33 @@ async def test_reauth_step_with_mfa(hass: HomeAssistant) -> None:
         assert result["step_id"] == "mfa"
         assert flow._user_data[CONF_GARMIN_USERNAME] == "reauth_mfa@example.com"
 
+
+@pytest.mark.asyncio
+async def test_reauth_step_mfa_submission_success(hass: HomeAssistant) -> None:
+    """Test submitting valid MFA code during re-authentication reloads entry and aborts with reauth_successful."""
+    entry = MagicMock()
+    entry.entry_id = "test_reauth_entry"
+    entry.data = {CONF_GARMIN_USERNAME: "reauth_mfa@example.com"}
+
+    flow = GarminHaAiConfigFlow()
+    flow.hass = hass
+    flow.context = {"entry_id": "test_reauth_entry"}
+    flow._reauth_entry = entry
+    flow._user_data = {
+        CONF_GARMIN_USERNAME: "reauth_mfa@example.com",
+        CONF_GARMIN_PASSWORD: "new_password",
+    }
+
+    with patch(
+        "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
+        new_callable=AsyncMock,
+    ) as mock_login:
+        mock_login.return_value = {"tokenstore": "reauth_tokens"}
+
+        result = await flow.async_step_mfa(user_input={"mfa_code": "654321"})
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_successful"
+        hass.async_create_task.assert_called_once()
+
+

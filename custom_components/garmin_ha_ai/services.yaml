@@ -1,0 +1,35 @@
+generate_report:
+  name: Generate AI Health Report
+  description: Manually triggers Garmin daily health data extraction and AI health report generation with notification dispatch.
+
+ask_question:
+  name: Ask AI Health Coach
+  description: Ask a personalized health, recovery, or fitness coaching question grounded in Garmin metric history.
+  fields:
+    question:
+      name: Question
+      description: The health, fitness, or workout coaching question to ask.
+      required: true
+      example: "Should I do heavy leg training today given my sleep and recovery status?"
+      selector:
+        text:
+          multiline: true
+    days_history:
+      name: Days of History Context
+      description: Number of recent historical days to provide as context (clamped 1-90).
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 90
+          unit_of_measurement: days
+          mode: box
+    response_entity:
+      name: Response Target Entity
+      description: Optional entity ID to write the AI answer text and attributes into.
+      required: false
+      example: "sensor.garmin_ai_custom_answer"
+      selector:
+        entity:
+          domain: sensor

@@ -27,6 +27,7 @@ from .ai_engine import (
     AIEngineError,
     assemble_report_prompt,
     get_ai_provider,
+    parse_ai_health_report,
 )
 from .const import (
     CONF_AI_API_KEY,
@@ -64,6 +65,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.storage = storage
         self.latest_report: AIHealthReport | None = None
         self.latest_answer: dict[str, Any] | None = None
+        self.last_update_time: str | None = None
         self._is_generating: bool = False
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
@@ -78,44 +80,46 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
     async def async_dispatch_notification(self, report: AIHealthReport) -> None:
         """Dispatch generated AI health report to configured notification targets with fault tolerance."""
         options = {**self.entry.data, **self.entry.options}
-        target = str(options.get(CONF_NOTIFICATION_TARGETS, "") or "").strip()
+        target_str = str(options.get(CONF_NOTIFICATION_TARGETS, "") or "").strip()
 
-        if not target:
+        if not target_str:
             LOGGER.debug("No notification target configured; skipping notification dispatch")
             return
 
+        targets = [t.strip() for t in target_str.split(",") if t.strip()]
         title = "Garmin AI Daily Report"
         short_msg = report.short_summary or "New Garmin AI Health Report available."
         full_msg = report.full_report or short_msg
 
-        try:
-            if target == "persistent_notification":
-                await self.hass.services.async_call(
-                    "persistent_notification",
-                    "create",
-                    {
-                        "title": title,
-                        "message": full_msg,
-                        "notification_id": "garmin_ai_daily_report",
-                    },
-                )
-                LOGGER.info("Successfully dispatched persistent notification report")
-            elif target.startswith("notify."):
-                domain, service = target.split(".", 1)
-                await self.hass.services.async_call(
-                    domain,
-                    service,
-                    {
-                        "title": title,
-                        "message": short_msg,
-                        "data": {"long_message": full_msg},
-                    },
-                )
-                LOGGER.info("Successfully dispatched notification to %s", target)
-            else:
-                LOGGER.warning("Unsupported notification target format '%s'; skipping dispatch", target)
-        except (ServiceNotFound, HomeAssistantError, Exception) as err:
-            LOGGER.warning("Failed to dispatch notification to target '%s': %s", target, err)
+        for target in targets:
+            try:
+                if target == "persistent_notification":
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": title,
+                            "message": full_msg,
+                            "notification_id": "garmin_ai_daily_report",
+                        },
+                    )
+                    LOGGER.info("Successfully dispatched persistent notification report")
+                elif target.startswith("notify.") and len(target.split(".", 1)[1].strip()) > 0:
+                    domain, service = target.split(".", 1)
+                    await self.hass.services.async_call(
+                        domain,
+                        service,
+                        {
+                            "title": title,
+                            "message": short_msg,
+                            "data": {"long_message": full_msg},
+                        },
+                    )
+                    LOGGER.info("Successfully dispatched notification to %s", target)
+                else:
+                    LOGGER.warning("Unsupported notification target format '%s'; skipping dispatch", target)
+            except (ServiceNotFound, HomeAssistantError, Exception) as err:
+                LOGGER.warning("Failed to dispatch notification to target '%s': %s", target, err)
 
     async def async_generate_report(self, force: bool = False) -> AIHealthReport | None:
         """Generate AI Health Report with debouncing lock."""
@@ -157,9 +161,15 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 model=model,
                 base_url=base_url,
             )
-            report = await provider.async_generate_report(prompt)
+            raw_response = await provider.async_generate_response(prompt)
+            report = parse_ai_health_report(
+                raw_text=raw_response,
+                provider_used=provider_type,
+                model_used=getattr(provider, "model", model or "default"),
+            )
 
             self.latest_report = report
+            self.last_update_time = dt_util.now().isoformat()
             self.async_update_listeners()
             LOGGER.info("Successfully generated AI health report using provider %s", provider_type)
 
@@ -198,6 +208,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 metrics.date,
                 metrics.steps,
             )
+            self.last_update_time = dt_util.now().isoformat()
             # Trigger background AI report generation automatically after sync
             self.hass.async_create_task(self.async_generate_report())
             return metrics

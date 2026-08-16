@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Any
 
-from ..models import GarminDailyMetrics
+from ..models import AIHealthReport, GarminDailyMetrics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,8 +47,13 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
     if metrics.activities:
         lines.append("- Logged Activities:")
         for act in metrics.activities:
-            act_type = act.get("activity_type", "Activity")
-            act_dur = act.get("duration_min", "N/A")
+            act_type = act.get("activity_type") or act.get("type") or act.get("name") or "Activity"
+            if act.get("duration_min") is not None:
+                act_dur = act.get("duration_min")
+            elif act.get("duration_sec") is not None:
+                act_dur = round(float(act["duration_sec"]) / 60, 1)
+            else:
+                act_dur = "N/A"
             act_cal = act.get("calories", "N/A")
             lines.append(f"  * {act_type}: {act_dur} min, {act_cal} kcal")
     else:
@@ -56,7 +63,7 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
 
 
 def truncate_history_context(
-    history: list[GarminDailyMetrics | dict[str, Any]],
+    history: list[GarminDailyMetrics | dict[str, Any]] | dict[str, Any] | None,
     max_chars: int = DEFAULT_MAX_HISTORY_CHARS,
 ) -> tuple[str, bool]:
     """Format history list into text and truncate older entries if total length exceeds max_chars.
@@ -66,12 +73,22 @@ def truncate_history_context(
     if not history:
         return "No previous 7-day history recorded yet.", False
 
+    if isinstance(history, dict):
+        history_list = [history[k] for k in sorted(history.keys())]
+    elif isinstance(history, list):
+        history_list = history
+    else:
+        history_list = []
+
+    if not history_list:
+        return "No previous 7-day history recorded yet.", False
+
     formatted_days: list[str] = []
     total_len = 0
     was_truncated = False
 
     # Take up to recent 7 days
-    recent_history = history[-7:] if len(history) > 7 else history
+    recent_history = history_list[-7:] if len(history_list) > 7 else history_list
     # Process from newest to oldest for safety truncation
     reversed_history = list(reversed(recent_history))
 
@@ -109,6 +126,35 @@ def truncate_history_context(
     # Re-reverse back to chronological order
     chronological = list(reversed(formatted_days))
     return "\n".join(chronological), was_truncated
+
+
+def parse_ai_health_report(
+    raw_text: str,
+    provider_used: str,
+    model_used: str,
+    timestamp: str | None = None,
+) -> AIHealthReport:
+    """Parse raw AI response text into structured AIHealthReport."""
+    ts = timestamp or datetime.now(timezone.utc).isoformat()
+    match = re.search(r"<summary>(.*?)</summary>", raw_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        short_summary = match.group(1).strip()
+    else:
+        # Fallback to first non-empty line or sentence
+        lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+        short_summary = lines[0] if lines else "Health report generated."
+
+    # Truncate short summary strictly under 250 characters
+    if len(short_summary) > 250:
+        short_summary = short_summary[:247] + "..."
+
+    return AIHealthReport(
+        timestamp=ts,
+        short_summary=short_summary,
+        full_report=raw_text.strip(),
+        provider_used=provider_used,
+        model_used=model_used,
+    )
 
 
 def assemble_report_prompt(

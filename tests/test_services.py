@@ -14,6 +14,7 @@ from custom_components.garmin_ha_ai.const import (
     DOMAIN,
     PROVIDER_GEMINI,
     SERVICE_ASK_QUESTION,
+    SERVICE_GENERATE_REPORT,
 )
 from custom_components.garmin_ha_ai.services import async_setup_services
 
@@ -94,6 +95,7 @@ async def test_ask_question_success(
     assert response == {
         "question": "Should I run today?",
         "answer": "You should run 5km today at an easy pace.",
+        "context_days": 3,
     }
     mock_provider.async_generate_response.assert_called_once()
     mock_coordinator.async_set_latest_answer.assert_called_once_with(
@@ -214,3 +216,73 @@ async def test_ask_question_not_setup_error(hass: HomeAssistant):
             blocking=True,
             return_response=True,
         )
+
+
+@pytest.mark.asyncio
+async def test_ask_question_with_response_entity(
+    hass: HomeAssistant, mock_storage, mock_coordinator
+):
+    """Test ask_question service sets state on target response_entity."""
+    await async_setup_services(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["test_entry_id"] = {
+        "storage": mock_storage,
+        "coordinator": mock_coordinator,
+    }
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(
+        return_value="Target entity answer."
+    )
+
+    with patch(
+        "custom_components.garmin_ha_ai.services.get_ai_provider",
+        return_value=mock_provider,
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ASK_QUESTION,
+            {
+                "question": "Status?",
+                "response_entity": "sensor.custom_response_target",
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+    hass.states.async_set.assert_called_once_with(
+        "sensor.custom_response_target",
+        "Target entity answer.",
+        {
+            "full_answer": "Target entity answer.",
+            "question": "Status?",
+            "context_days": 3,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_report_service_call(
+    hass: HomeAssistant, mock_storage, mock_coordinator
+):
+    """Test generate_report service triggers coordinator.async_generate_report(force=True)."""
+    await async_setup_services(hass)
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["test_entry_id"] = {
+        "storage": mock_storage,
+        "coordinator": mock_coordinator,
+    }
+
+    mock_coordinator.async_generate_report = AsyncMock()
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GENERATE_REPORT,
+        {},
+        blocking=True,
+    )
+
+    mock_coordinator.async_generate_report.assert_called_once_with(force=True)
+

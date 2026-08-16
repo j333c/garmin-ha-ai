@@ -31,6 +31,12 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     mock_storage.async_save_daily_metrics = AsyncMock()
     mock_storage.async_prune_history = AsyncMock()
 
+    def _create_task(coro):
+        coro.close()
+        return MagicMock()
+
+    hass.async_create_task = MagicMock(side_effect=_create_task)
+
     coordinator = GarminDataUpdateCoordinator(
         hass, mock_entry, mock_client, mock_storage
     )
@@ -41,6 +47,7 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     mock_client.async_fetch_daily_metrics.assert_called()
     mock_storage.async_save_daily_metrics.assert_called_once_with(sample_metrics.to_dict())
     mock_storage.async_prune_history.assert_called_once()
+    hass.async_create_task.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -111,7 +118,10 @@ async def test_coordinator_async_generate_report_success(hass: HomeAssistant) ->
     )
 
     mock_provider = MagicMock()
-    mock_provider.async_generate_report = AsyncMock(return_value=mock_report)
+    mock_provider.model = "gemini-2.0-flash"
+    mock_provider.async_generate_response = AsyncMock(
+        return_value="<summary>Great recovery today with 85 sleep score.</summary>\n\n## Daily Report\nLooking strong!"
+    )
 
     with patch(
         "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
@@ -119,8 +129,10 @@ async def test_coordinator_async_generate_report_success(hass: HomeAssistant) ->
     ):
         report = await coordinator.async_generate_report()
 
-        assert report is mock_report
-        assert coordinator.latest_report is mock_report
+        assert report is not None
+        assert report.short_summary == "Great recovery today with 85 sleep score."
+        assert "## Daily Report" in report.full_report
+        assert coordinator.latest_report == report
         coordinator.async_update_listeners.assert_called_once()
         assert coordinator._is_generating is False
 

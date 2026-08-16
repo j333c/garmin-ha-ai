@@ -33,9 +33,9 @@ def test_sensor_setup_entry() -> None:
 
         await async_setup_entry(mock_hass, mock_entry, add_entities)
 
-        # 6 metric sensors + 2 report sensors + 1 last answer sensor = 9 total
-        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 3
-        assert len(added_entities) == 9
+        # 6 metric sensors + 2 report sensors + 1 last answer sensor + 1 last update sensor = 10 total
+        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 4
+        assert len(added_entities) == 10
 
     asyncio.run(run())
 
