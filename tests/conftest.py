@@ -69,8 +69,8 @@ if "homeassistant" not in sys.modules:
             self.hass = hass
             self.version = version
             self.key = key
-            self.async_load = MagicMock()
-            self.async_save = MagicMock()
+            self.async_load = AsyncMock(return_value={})
+            self.async_save = AsyncMock(return_value=None)
 
     storage_mock = MagicMock()
     storage_mock.Store = MockStore
@@ -89,6 +89,15 @@ if "homeassistant" not in sys.modules:
             self.name = name
             self.update_interval = update_interval
             self.data = None
+            self._listeners = []
+
+        def async_update_listeners(self):
+            for listener in list(self._listeners):
+                listener()
+
+        def async_add_listener(self, update_callback, context=None):
+            self._listeners.append(update_callback)
+            return lambda: self._listeners.remove(update_callback)
 
         async def _async_update_data(self):
             raise NotImplementedError
@@ -268,7 +277,10 @@ if "httpx" not in sys.modules:
         pass
 
     class MockHTTPStatusError(Exception):
-        pass
+        def __init__(self, *args, **kwargs):
+            self.response = kwargs.get("response") or MagicMock()
+            self.request = kwargs.get("request") or MagicMock()
+            super().__init__(*args)
 
     class MockRequestError(Exception):
         pass
@@ -311,9 +323,19 @@ if "google" not in sys.modules or "google.genai" not in sys.modules:
 
     errors_mock.APIError = MockAPIError
     genai_mock.errors = errors_mock
+
+    types_mock = MagicMock()
+    class MockGenerateContentConfig:
+        def __init__(self, system_instruction=None, **kwargs):
+            self.system_instruction = system_instruction
+
+    types_mock.GenerateContentConfig = MockGenerateContentConfig
+    genai_mock.types = types_mock
+
     google_mock.genai = genai_mock
     sys.modules["google"] = google_mock
     sys.modules["google.genai"] = genai_mock
+    sys.modules["google.genai.types"] = types_mock
     sys.modules["google.genai.errors"] = errors_mock
 
 
@@ -382,13 +404,32 @@ def hass() -> MagicMock:
     hass_inst.services = services_mock
 
     async def async_add_executor_job(target: Any, *args: Any) -> Any:
-        return target(*args)
+        res = target(*args)
+        if asyncio.iscoroutine(res):
+            return await res
+        return res
 
     hass_inst.async_add_executor_job = AsyncMock(side_effect=async_add_executor_job)
+
+    def _create_task(coro):
+        if inspect.iscoroutine(coro):
+            coro.close()
+        return MagicMock()
+
+    hass_inst.async_create_task = MagicMock(side_effect=_create_task)
     return hass_inst
 
 
 
+import inspect
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_pyfunc_call(pyfuncitem):
+    """Run async test functions in an asyncio event loop."""
+    if inspect.iscoroutinefunction(pyfuncitem.obj):
+        testargs = {arg: pyfuncitem.funcargs[arg] for arg in pyfuncitem._fixtureinfo.argnames}
+        asyncio.run(pyfuncitem.obj(**testargs))
+        return True
+    return None
 

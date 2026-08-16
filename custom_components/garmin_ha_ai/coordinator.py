@@ -212,9 +212,9 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             # Trigger background AI report generation automatically after sync
             self.hass.async_create_task(self.async_generate_report())
             return metrics
-        except ConfigEntryAuthFailed:
-            LOGGER.warning("Authentication failed during Garmin background polling")
-            raise
+        except (ConfigEntryAuthFailed, GarminConnectAuthenticationError) as err:
+            LOGGER.warning("Authentication failed during Garmin background polling: %s", err)
+            raise ConfigEntryAuthFailed(f"Garmin authentication failed: {err}") from err
         except (GarminConnectConnectionError, Exception) as err:
             LOGGER.warning("Error fetching Garmin data: %s", err)
             raise UpdateFailed(f"Error fetching Garmin data: {err}") from err
