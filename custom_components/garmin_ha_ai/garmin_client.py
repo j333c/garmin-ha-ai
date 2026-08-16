@@ -9,7 +9,6 @@ from garminconnect import (
     Garmin,
     GarminConnectAuthenticationError,
     GarminConnectConnectionError,
-    GarminConnectMfaRequired,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -18,6 +17,13 @@ import homeassistant.util.dt as dt_util
 from .const import LOGGER
 from .models import GarminDailyMetrics
 from .storage import GarminStorage
+
+
+class GarminMfaRequired(Exception):
+    """Exception raised when Garmin Connect requires MFA verification."""
+
+
+GarminConnectMfaRequired = GarminMfaRequired
 
 
 class GarminClient:
@@ -42,8 +48,19 @@ class GarminClient:
 
         def _restore_session() -> Garmin:
             client = Garmin()
-            client.garth.loads(tokens["tokenstore"])
-            client.login()
+            token_data = tokens["tokenstore"]
+            if hasattr(client, "garth") and hasattr(client.garth, "loads"):
+                client.garth.loads(token_data)
+                client.login()
+            else:
+                try:
+                    client.login(tokenstore=token_data)
+                except TypeError:
+                    if hasattr(client, "client") and hasattr(client.client, "loads"):
+                        client.client.loads(token_data)
+                        client.login()
+                    else:
+                        client.login()
             return client
 
         try:
@@ -67,21 +84,46 @@ class GarminClient:
         """Authenticate with Garmin Connect using email/password and optional MFA code.
 
         Returns token dictionary on success.
+        Raises GarminMfaRequired if MFA is requested.
         Raises ConfigEntryAuthFailed on invalid credentials.
         """
         def _credential_login() -> Garmin:
             client = Garmin(email=username, password=password)
             if mfa_code:
-                client.login(mfa_code=mfa_code)
-            else:
-                client.login()
+                try:
+                    client.login(mfa_code=mfa_code)
+                except TypeError:
+                    client.login()
+                return client
+
+            def mfa_callback():
+                raise GarminMfaRequired("Garmin MFA required")
+
+            try:
+                client.prompt_mfa = mfa_callback
+            except Exception:
+                pass
+
+            try:
+                res = client.login()
+            except GarminMfaRequired:
+                raise
+            except Exception as err:
+                err_msg = str(err).lower()
+                if "mfa" in err_msg or "2fa" in err_msg or "verification code" in err_msg:
+                    raise GarminMfaRequired("Garmin MFA required") from err
+                raise
+
+            if isinstance(res, tuple) and len(res) > 0 and res[0] == "needs_mfa":
+                raise GarminMfaRequired("Garmin MFA required")
+
             return client
 
         try:
             self.client = await self.hass.async_add_executor_job(_credential_login)
             LOGGER.info("Successfully authenticated with Garmin Connect")
             return await self._async_save_current_tokens()
-        except (GarminConnectMfaRequired, GarminConnectConnectionError):
+        except (GarminMfaRequired, GarminConnectConnectionError):
             raise
         except GarminConnectAuthenticationError as err:
             LOGGER.warning("Garmin authentication failed")
@@ -91,17 +133,39 @@ class GarminClient:
             raise ConfigEntryAuthFailed("Garmin authentication failed") from err
 
     async def _async_save_current_tokens(self) -> dict[str, Any]:
-        """Extract current tokens from garth and save to GarminStorage."""
-        if not self.client or not hasattr(self.client, "garth"):
+        """Extract current tokens and save to GarminStorage."""
+        if not self.client:
             return {}
 
         def _dump_tokens() -> str:
-            return self.client.garth.dumps()
+            if hasattr(self.client, "garth") and hasattr(self.client.garth, "dumps"):
+                return self.client.garth.dumps()
+            if hasattr(self.client, "dumps") and callable(self.client.dumps):
+                return self.client.dumps()
+            if hasattr(self.client, "client") and hasattr(self.client.client, "dumps") and callable(self.client.client.dumps):
+                return self.client.client.dumps()
+            if hasattr(self.client, "client"):
+                c = self.client.client
+                import json
+                token_dict = {
+                    "di_token": getattr(c, "di_token", None),
+                    "di_refresh_token": getattr(c, "di_refresh_token", None),
+                    "di_client_id": getattr(c, "di_client_id", None),
+                    "jwt_web": getattr(c, "jwt_web", None),
+                    "csrf_token": getattr(c, "csrf_token", None),
+                }
+                return json.dumps(token_dict)
+            return ""
 
-        token_str = await self.hass.async_add_executor_job(_dump_tokens)
-        token_data = {"tokenstore": token_str}
-        await self.storage.async_save_tokens(token_data)
-        return token_data
+        try:
+            token_str = await self.hass.async_add_executor_job(_dump_tokens)
+            if token_str:
+                token_data = {"tokenstore": token_str}
+                await self.storage.async_save_tokens(token_data)
+                return token_data
+        except Exception as err:
+            LOGGER.warning("Could not serialize Garmin session tokens: %s", err)
+        return {}
 
     async def async_get_client(self) -> Garmin:
         """Ensure an authenticated Garmin client instance is available.

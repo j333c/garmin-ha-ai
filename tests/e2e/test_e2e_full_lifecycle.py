@@ -54,12 +54,12 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
     flow = GarminHaAiConfigFlow()
     flow.hass = hass
 
-    from garminconnect import GarminConnectMfaRequired
+    from custom_components.garmin_ha_ai.garmin_client import GarminMfaRequired
 
     # User enters credentials & AI provider config -> Garmin raises MFA Required
     with patch(
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_login_with_credentials",
-        side_effect=GarminConnectMfaRequired("MFA code required"),
+        side_effect=GarminMfaRequired("MFA code required"),
     ):
         user_result = await flow.async_step_user(
             {

@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Garmin HA AI Einrichtung",
+        "description": "Konfigurieren Sie Ihre Garmin Connect Zugangsdaten und AI-Provider-Optionen.",
+        "data": {
+          "username": "Garmin E-Mail / Benutzername",
+          "password": "Garmin Passwort",
+          "ai_provider": "AI Provider",
+          "ai_api_key": "AI API-Schlüssel",
+          "fitness_goals": "Fitness- & Gesundheitsziele (Optional)"
+        }
+      },
+      "mfa": {
+        "title": "Garmin MFA-Authentifizierung",
+        "description": "Bitte geben Sie den 6-stelligen Bestätigungscode ein, der von Garmin gesendet wurde.",
+        "data": {
+          "mfa_code": "6-stelliger Bestätigungscode"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Garmin-Konto erneut authentifizieren",
+        "description": "Ihre Garmin-Sitzung ist abgelaufen. Bitte geben Sie Ihr Passwort erneut ein.",
+        "data": {
+          "password": "Garmin Passwort"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Garmin-Zugangsdaten oder abgelaufene Sitzung.",
+      "cannot_connect": "Verbindung zu den Garmin Connect Servern fehlgeschlagen.",
+      "mfa_required": "MFA-Bestätigungscode ist erforderlich.",
+      "invalid_mfa": "Ungültiger 6-stelliger MFA-Code. Bitte versuchen Sie es erneut.",
+      "unknown": "Unerwarteter Fehler aufgetreten."
+    },
+    "abort": {
+      "already_configured": "Garmin-Konto ist bereits konfiguriert.",
+      "reauth_successful": "Re-Authentifizierung war erfolgreich."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Garmin HA AI Optionen",
+        "description": "Passen Sie Fitnessziele, Coaching-Vorgaben, Verlaufsspeicher und AI-Parameter an.",
+        "data": {
+          "retention_days": "Historien-Aufbewahrung (Tage)",
+          "fitness_goals": "Fitness- & Gesundheitsziele",
+          "coaching_directives": "AI-Coaching-Vorgaben & Tonalität",
+          "notification_targets": "Benachrichtigungsdienste (kommagetrennt)",
+          "polling_schedule": "Tägliche Abrufzeit (HH:MM:SS)",
+          "ai_provider": "AI Provider",
+          "ai_api_key": "AI API-Schlüssel",
+          "ai_model": "AI Modellname",
+          "ai_base_url": "AI Basis-URL (für OpenAI-kompatible/lokale Endpunkte)"
+        }
+      }
+    }
+  }
+}

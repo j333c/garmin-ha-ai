@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from garminconnect import GarminConnectMfaRequired
 import pytest
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from custom_components.garmin_ha_ai.config_flow import GarminHaAiConfigFlow
+from custom_components.garmin_ha_ai.garmin_client import GarminMfaRequired
 from custom_components.garmin_ha_ai.const import (
     CONF_AI_API_KEY,
     CONF_AI_PROVIDER,
@@ -70,13 +70,11 @@ async def test_user_step_mfa_required(hass: HomeAssistant) -> None:
         CONF_AI_API_KEY: "gemini_api_key_12345",
     }
 
-    from garminconnect import GarminConnectMfaRequired
-
     with patch(
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
         new_callable=AsyncMock,
     ) as mock_login:
-        mock_login.side_effect = GarminConnectMfaRequired()
+        mock_login.side_effect = GarminMfaRequired()
         result = await flow.async_step_user(user_input=user_input)
 
         assert result["type"] == "form"
@@ -202,7 +200,7 @@ async def test_reauth_step_with_mfa(hass: HomeAssistant) -> None:
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
         new_callable=AsyncMock,
     ) as mock_login:
-        mock_login.side_effect = GarminConnectMfaRequired()
+        mock_login.side_effect = GarminMfaRequired()
 
         result = await flow.async_step_reauth_confirm(
             user_input={CONF_GARMIN_PASSWORD: "new_password"}
@@ -240,5 +238,56 @@ async def test_reauth_step_mfa_submission_success(hass: HomeAssistant) -> None:
         assert result["type"] == "abort"
         assert result["reason"] == "reauth_successful"
         hass.async_create_task.assert_called_once()
+
+
+def test_config_flow_domain_and_manifest() -> None:
+    """Test config flow domain and manifest.json consistency to prevent 'Invalid handler' errors."""
+    import json
+    from pathlib import Path
+    from custom_components.garmin_ha_ai.const import DOMAIN
+
+    assert DOMAIN == "garmin_ha_ai"
+    assert GarminHaAiConfigFlow.VERSION == 1
+
+    manifest_path = Path(__file__).parent.parent / "custom_components" / "garmin_ha_ai" / "manifest.json"
+    assert manifest_path.exists()
+
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    assert manifest.get("domain") == DOMAIN
+    assert manifest.get("config_flow") is True
+    assert "garminconnect" in str(manifest.get("requirements", []))
+
+
+def test_translations_consistency() -> None:
+    """Test that strings.json and translation files contain required config and options steps."""
+    import json
+    from pathlib import Path
+
+    base_path = Path(__file__).parent.parent / "custom_components" / "garmin_ha_ai"
+    strings_path = base_path / "strings.json"
+    en_path = base_path / "translations" / "en.json"
+    de_path = base_path / "translations" / "de.json"
+
+    assert strings_path.exists()
+    assert en_path.exists()
+    assert de_path.exists()
+
+    with open(strings_path, encoding="utf-8") as f:
+        strings = json.load(f)
+    with open(en_path, encoding="utf-8") as f:
+        en = json.load(f)
+    with open(de_path, encoding="utf-8") as f:
+        de = json.load(f)
+
+    for data in (strings, en, de):
+        assert "config" in data
+        assert "user" in data["config"]["step"]
+        assert "mfa" in data["config"]["step"]
+        assert "reauth_confirm" in data["config"]["step"]
+        assert "options" in data
+        assert "init" in data["options"]["step"]
+
 
 

@@ -80,11 +80,11 @@ async def test_e2e_reauth_lifecycle_on_session_expiration(hass: HomeAssistant) -
 
     reauth_flow._reauth_entry = entry
 
-    from garminconnect import GarminConnectMfaRequired
+    from custom_components.garmin_ha_ai.garmin_client import GarminMfaRequired
 
     with patch(
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_login_with_credentials",
-        side_effect=GarminConnectMfaRequired("MFA challenge"),
+        side_effect=GarminMfaRequired("MFA challenge"),
     ):
         reauth_step1 = await reauth_flow.async_step_reauth_confirm(
             {CONF_GARMIN_PASSWORD: "new-super-secret-password"}

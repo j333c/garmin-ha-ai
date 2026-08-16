@@ -38,8 +38,21 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         super().__init__()
         if config_entry is not None:
-            self.config_entry = config_entry
+            self._config_entry = config_entry
             self.handler = config_entry.entry_id
+            try:
+                self.config_entry = config_entry
+            except AttributeError:
+                pass
+
+    @property
+    def _entry(self) -> config_entries.ConfigEntry:
+        """Return current config entry safely across HA versions."""
+        if hasattr(self, "_config_entry") and self._config_entry is not None:
+            return self._config_entry
+        if hasattr(self, "config_entry") and self.config_entry is not None:
+            return self.config_entry
+        raise ValueError("ConfigEntry not set on OptionsFlow")
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -57,8 +70,8 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
 
             return self.async_create_entry(title="", data=user_input)
 
-        current_options = self.config_entry.options
-        current_data = self.config_entry.data
+        current_options = self._entry.options
+        current_data = self._entry.data
 
         options_schema = vol.Schema(
             {

@@ -7,7 +7,6 @@ from typing import Any
 from garminconnect import (
     GarminConnectAuthenticationError,
     GarminConnectConnectionError,
-    GarminConnectMfaRequired,
 )
 import voluptuous as vol
 
@@ -29,7 +28,7 @@ from .const import (
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
 )
-from .garmin_client import GarminClient
+from .garmin_client import GarminClient, GarminMfaRequired
 from .storage import GarminStorage
 
 
@@ -67,7 +66,7 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await client.async_login_with_credentials(username, password)
                 # Successful login without MFA
                 return self._create_garmin_entry()
-            except GarminConnectMfaRequired:
+            except GarminMfaRequired:
                 LOGGER.info("Garmin MFA required for user: %s", username)
                 return await self.async_step_mfa()
             except ConfigEntryAuthFailed:
@@ -160,7 +159,7 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
                 )
                 return self.async_abort(reason="reauth_successful")
-            except GarminConnectMfaRequired:
+            except GarminMfaRequired:
                 self._user_data = {
                     CONF_GARMIN_USERNAME: username,
                     CONF_GARMIN_PASSWORD: password,

@@ -40,10 +40,9 @@ import pytest
 from garminconnect import (
     GarminConnectAuthenticationError,
     GarminConnectConnectionError,
-    GarminConnectMfaRequired,
 )
 
-from custom_components.garmin_ha_ai.garmin_client import GarminClient
+from custom_components.garmin_ha_ai.garmin_client import GarminClient, GarminMfaRequired
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 
@@ -323,7 +322,7 @@ def test_async_fetch_daily_metrics_connection_error() -> None:
 
 
 def test_async_login_with_credentials_mfa_propagation() -> None:
-    """Test async_login_with_credentials allows GarminConnectMfaRequired to bubble up."""
+    """Test async_login_with_credentials allows GarminMfaRequired to bubble up."""
 
     async def run() -> None:
         mock_hass = MagicMock()
@@ -337,10 +336,10 @@ def test_async_login_with_credentials_mfa_propagation() -> None:
 
         with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
             mock_garmin_inst = MagicMock()
-            mock_garmin_inst.login.side_effect = GarminConnectMfaRequired()
+            mock_garmin_inst.login.side_effect = GarminMfaRequired()
             mock_garmin_cls.return_value = mock_garmin_inst
 
-            with pytest.raises(GarminConnectMfaRequired):
+            with pytest.raises(GarminMfaRequired):
                 await client_adapter.async_login_with_credentials("user@example.com", "pass")
 
     asyncio.run(run())

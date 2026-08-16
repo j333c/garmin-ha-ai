@@ -261,12 +261,17 @@ if "garminconnect" not in sys.modules:
     class MockGarminConnectConnectionError(Exception):
         pass
 
-    class MockGarminConnectMfaRequired(Exception):
+    class MockGarminConnectTooManyRequestsError(MockGarminConnectConnectionError):
+        pass
+
+    class MockGarminConnectNotFoundError(MockGarminConnectConnectionError):
         pass
 
     gc_mock.GarminConnectAuthenticationError = MockGarminConnectAuthenticationError
     gc_mock.GarminConnectConnectionError = MockGarminConnectConnectionError
-    gc_mock.GarminConnectMfaRequired = MockGarminConnectMfaRequired
+    gc_mock.GarminConnectTooManyRequestsError = MockGarminConnectTooManyRequestsError
+    gc_mock.GarminConnectNotFoundError = MockGarminConnectNotFoundError
+    gc_mock.Garmin = MagicMock
     sys.modules["garminconnect"] = gc_mock
 
 # 4. Mock httpx
