@@ -77,63 +77,66 @@ You can test data polling and AI generation manually via **Developer Tools**:
 
 ## Step 5: Add Lovelace Dashboard Cards
 
-Here are ready-to-use YAML snippets for your Home Assistant Lovelace dashboard:
+The integration provides ready-to-use entities for a complete 3-tier health dashboard (Fast Health Glance, Instant Q&A Coach, and Deep Insight Report).
 
-### 1. Today's AI Coach Briefing Card (Markdown)
+> 💡 For complete full-dashboard presets for both modern **Sections** and **Classic** views, see the [**Lovelace Dashboard Guide**](dashboard_cards.md).
 
-```yaml
-type: markdown
-title: 🤖 AI Health Coach Briefing
-content: >
-  **Summary:** {{ states('sensor.garmin_ai_health_report_short') }}
-
-  ---
-
-  {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
-```
-
-### 2. Core Health Metrics Glance Card
-
-```yaml
-type: glance
-title: 🏃 Garmin Health & Recovery
-entities:
-  - entity: sensor.garmin_sleep_score
-    name: Sleep Score
-  - entity: sensor.garmin_body_battery
-    name: Body Battery
-  - entity: sensor.garmin_stress_level
-    name: Stress Level
-  - entity: sensor.garmin_resting_heart_rate
-    name: Resting HR
-  - entity: sensor.garmin_steps
-    name: Steps Today
-```
-
-### 3. Interactive Health Coach Q&A Card
-
-Using the native **Home Assistant Action Button** and **Markdown card**:
+### Quick-Start Lovelace YAML Stack
 
 ```yaml
 type: vertical-stack
+title: 🤖 Garmin AI Health Coach
 cards:
+  # Tier 1: Fast Status Glance
+  - type: glance
+    entities:
+      - entity: sensor.garmin_sleep_score
+        name: Sleep
+      - entity: sensor.garmin_body_battery
+        name: Battery
+      - entity: sensor.garmin_stress_level
+        name: Stress
+      - entity: sensor.garmin_resting_heart_rate
+        name: Resting HR
+      - entity: sensor.garmin_steps
+        name: Steps
+
   - type: markdown
-    title: 💬 Ask AI Health Coach
     content: >
-      **Last Question:** {{ state_attr('sensor.garmin_ai_last_answer', 'question') | default('No question asked yet.', true) }}
+      💡 **Today's Focus:** {{ states('sensor.garmin_ai_health_report_short') }}
 
-      **Coach Advice:**
-      {{ state_attr('sensor.garmin_ai_last_answer', 'full_answer') | default('Tap the button below to ask your coach for advice based on your recent recovery.', true) }}
+  # Tier 2: Instant Q&A Coach (Zero Helper Setup)
+  - type: entities
+    show_header_toggle: false
+    entities:
+      - entity: text.garmin_ai_question
+        name: Ask Coach
+      - entity: button.garmin_ai_ask_question
+        name: Submit Question
 
-  - type: button
-    name: Ask Coach: Ready for Hard Workout?
-    icon: mdi:chat-question
-    tap_action:
-      action: call-service
-      service: garmin_ha_ai.ask_question
-      service_data:
-        question: "Should I do a hard tempo run or a recovery session today based on my recovery status?"
-        days_history: 7
+  - type: markdown
+    content: >
+      <div style="resize: vertical; overflow: auto; min-height: 100px; max-height: 350px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">
+      {% if is_state('sensor.garmin_ai_last_answer', 'No question asked yet') %}
+        *Type a question above and tap "Submit Question".*
+      {% else %}
+        **Q: {{ state_attr('sensor.garmin_ai_last_answer', 'question') }}**
+
+        {{ state_attr('sensor.garmin_ai_last_answer', 'full_answer') }}
+      {% endif %}
+      </div>
+
+  # Tier 3: Deep Insight View (Long AI Report)
+  - type: entities
+    entities:
+      - entity: button.garmin_ai_generate_report
+        name: Refresh Daily Report
+
+  - type: markdown
+    content: >
+      <div style="resize: vertical; overflow: auto; min-height: 180px; max-height: 600px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
+      {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
+      </div>
 ```
 
 ---

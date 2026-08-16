@@ -121,53 +121,72 @@ data:
 
 ---
 
-## 🎨 Lovelace Dashboard Examples
+## 🎨 Lovelace Dashboard Layouts
 
-### 1. Interactive Resizable Health Coach & Report Card (Recommended)
+The integration is built around three clear dashboard tiers to make health monitoring effortless:
 
-Includes interactive question typing, one-click submission, view switcher dropdown, and a **resizable text field** with a draggable bottom-right handle:
+1. **⚡ Fast Health Status**: Glance metrics + concise daily AI recommendation.
+2. **💬 Instant Q&A Coach**: Zero-helper text input to ask recovery and workout questions anytime.
+3. **📋 Deep Insight View**: Rich full Markdown analysis with multi-day training advice.
+
+> 📖 **Full Guide & Presets**: For complete copy-paste dashboard presets (Sections & Classic Views), see the [**Lovelace Dashboard Setup Guide**](docs/dashboard_cards.md).
+
+### Quick-Start Vertical Stack Example
 
 ```yaml
 type: vertical-stack
 title: 🤖 Garmin AI Health Coach
 cards:
+  # Tier 1: Fast Status Glance
+  - type: glance
+    entities:
+      - entity: sensor.garmin_sleep_score
+        name: Sleep
+      - entity: sensor.garmin_body_battery
+        name: Battery
+      - entity: sensor.garmin_stress_level
+        name: Stress
+      - entity: sensor.garmin_resting_heart_rate
+        name: Resting HR
+      - entity: sensor.garmin_steps
+        name: Steps
+
+  - type: markdown
+    content: >
+      💡 **Today's Focus:** {{ states('sensor.garmin_ai_health_report_short') }}
+
+  # Tier 2: Instant Q&A Coach
   - type: entities
+    show_header_toggle: false
     entities:
       - entity: text.garmin_ai_question
-        name: Coaching Question
+        name: Ask Coach
       - entity: button.garmin_ai_ask_question
-        name: Send Question
-      - entity: select.garmin_ai_report_view
-        name: Active View
+        name: Submit Question
+
+  - type: markdown
+    content: >
+      <div style="resize: vertical; overflow: auto; min-height: 100px; max-height: 350px; padding: 10px; border: 1px solid var(--divider-color); border-radius: 8px;">
+      {% if is_state('sensor.garmin_ai_last_answer', 'No question asked yet') %}
+        *Type a question above and tap "Submit Question".*
+      {% else %}
+        **Q: {{ state_attr('sensor.garmin_ai_last_answer', 'question') }}**
+
+        {{ state_attr('sensor.garmin_ai_last_answer', 'full_answer') }}
+      {% endif %}
+      </div>
+
+  # Tier 3: Deep Insight View
+  - type: entities
+    entities:
       - entity: button.garmin_ai_generate_report
         name: Refresh Daily Report
 
   - type: markdown
-    title: 📋 Coach Briefing & Responses
     content: >
-      <div style="resize: vertical; overflow: auto; min-height: 140px; max-height: 650px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
-
-      {{ state_attr('sensor.garmin_ai_selected_report', 'report_text') }}
-
+      <div style="resize: vertical; overflow: auto; min-height: 180px; max-height: 600px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
+      {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
       </div>
-```
-
-### 2. Metric Glance Card
-
-```yaml
-type: glance
-title: 🏃 Garmin Health Overview
-entities:
-  - entity: sensor.garmin_sleep_score
-    name: Sleep
-  - entity: sensor.garmin_body_battery
-    name: Body Battery
-  - entity: sensor.garmin_stress_level
-    name: Stress
-  - entity: sensor.garmin_resting_heart_rate
-    name: Resting HR
-  - entity: sensor.garmin_steps
-    name: Steps
 ```
 
 ---
