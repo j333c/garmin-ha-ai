@@ -376,3 +376,29 @@ async def test_openai_provider_list_models_method() -> None:
         assert models == ["discovered-model-1", "discovered-model-2"]
         mock_list.assert_called_once()
 
+
+def test_openai_provider_url_validation_and_ssrf_blocking() -> None:
+    """Test OpenAIProvider base_url validation supports local HTTP but blocks cloud metadata."""
+    from custom_components.garmin_ha_ai.ai_engine.base import AIEngineClientError
+    from custom_components.garmin_ha_ai.ai_engine.openai import validate_base_url
+
+    # Local HTTP setups without SSL are fully supported
+    assert validate_base_url("http://192.168.1.100:11434/v1") == "http://192.168.1.100:11434/v1"
+    assert validate_base_url("http://localhost:11434/v1") == "http://localhost:11434/v1"
+    assert validate_base_url("http://homeassistant.local:8000/v1") == "http://homeassistant.local:8000/v1"
+    assert validate_base_url("https://api.openai.com/v1/") == "https://api.openai.com/v1"
+
+    # Disallowed non-HTTP/HTTPS schemes
+    with pytest.raises(AIEngineClientError, match="Invalid base_url scheme"):
+        validate_base_url("ftp://malicious-server.org/v1")
+
+    with pytest.raises(AIEngineClientError, match="Invalid base_url scheme"):
+        validate_base_url("file:///etc/passwd")
+
+    # Cloud metadata SSRF blocking
+    with pytest.raises(AIEngineClientError, match="Access to cloud metadata service"):
+        validate_base_url("http://169.254.169.254/latest/meta-data")
+
+    with pytest.raises(AIEngineClientError, match="Access to cloud metadata service"):
+        validate_base_url("http://metadata.google.internal/computeMetadata/v1")
+

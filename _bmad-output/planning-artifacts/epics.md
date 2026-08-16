@@ -112,6 +112,10 @@ User can ask context-grounded health and workout questions on demand via service
 User can dynamically select Gemini/OpenAI models from an API-populated dropdown in Options Flow (with modern model defaults and fast-failing non-transient error handling), configure daily polling schedule using an interactive UI Time Picker, trigger AI health report generation on-demand via a native Home Assistant Button entity (`button.garmin_ai_generate_report`) or dashboard button card, ask interactive coaching questions via dedicated dashboard card patterns, and benefit from non-blocking event-loop operation, ISO timestamp datetime typing, and resilient Garmin 429 rate-limit handling.
 **FRs covered:** FR-3, FR-5, FR-6, FR-8, FR-11, FR-13, FR-14, FR-17
 
+### Epic 5: Trend Analytics, Baseline Deltas & Home Assistant Context Enrichment
+User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores), granular activity metrics (heart rate zones, pace, workout structure), and ambient Home Assistant context injection (sleep bedroom temperature, presence, and calendar schedules).
+**FRs covered:** FR-7, FR-14, FR-15
+
 
 ## Epic 1: Integration Setup, Garmin Auth & Health Metric Ingestion Foundation
 
@@ -395,5 +399,50 @@ So that temporary Garmin IP rate limits do not trigger false re-authentication a
 **When** token resume, login, or metric fetching executes
 **Then** `garmin_client.py` logs a rate-limit notice and does NOT raise `ConfigEntryAuthFailed` or wipe valid OAuth tokens
 **And** `coordinator.py` catches 429 errors and falls back to cached local metrics without triggering re-authentication prompts.
+
+---
+
+## Epic 5: Trend Analytics, Baseline Deltas & Home Assistant Context Enrichment
+
+User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores), granular activity metrics (heart rate zones, pace, workout structure), and ambient Home Assistant context injection (sleep bedroom temperature, presence, and calendar schedules).
+
+### Story 5.1: 7-Day Pre-Computed Trend & Baseline Analytics Engine (`analytics.py`)
+
+As an AI Prompt Assembler and Coach,
+I want a deterministic analytics module calculating statistical baselines and deltas (e.g. 7-day average sleep score, HRV deviation percentage, training volume load delta),
+So that AI prompts receive explicit mathematical facts rather than relying on LLMs to perform error-prone mental arithmetic over raw tables.
+
+**Acceptance Criteria:**
+
+**Given** 7 days of stored metric history snapshots
+**When** prompt assembly executes for reports or Q&A
+**Then** `analytics.py` calculates mean sleep score, HRV trend (stable, declining, improving), and calorie/step delta vs user goals
+**And** these computed statistical facts are structured in Block 2 of the prompt payload.
+
+### Story 5.2: Rich Activity Ingestion & Heart Rate Zone Extraction (`models.py`, `garmin_client.py`)
+
+As an active athlete,
+I want Garmin activities to capture aerobic/anaerobic training effect, average & maximum heart rate, and time-in-zones,
+So that the AI coach can assess workout intensity and suggest specific recovery protocols.
+
+**Acceptance Criteria:**
+
+**Given** an activity recorded on Garmin Connect
+**When** `garmin_client.py` fetches daily activity details
+**Then** `GarminDailyMetrics.activities` includes HR stats (avg HR, max HR) and training effect metrics
+**And** prompt assembler presents activity intensity to the AI provider.
+
+### Story 5.3: Home Assistant Ambient Context Injection (Sleep Room Temp & Calendar Awareness)
+
+As a smart home owner,
+I want the integration to allow selecting external Home Assistant entities (e.g. bedroom temperature sensor, sleep room humidity, work calendar),
+So that the AI health coach can correlate sleep disruptions with room climate and schedule intense workouts around light work days.
+
+**Acceptance Criteria:**
+
+**Given** configured entity selectors in Options Flow (e.g. `sensor.bedroom_temperature`, `calendar.work`)
+**When** generating daily briefings
+**Then** coordinator reads the current states and incorporates ambient environmental context into prompt Block 3.
+
 
 

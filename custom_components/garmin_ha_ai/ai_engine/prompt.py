@@ -19,10 +19,25 @@ DEFAULT_COACHING_DIRECTIVES = (
 )
 
 
-def _format_metric_val(val: Any, unit: str = "") -> str:
-    """Format metric value, returning N/A if None."""
+def sanitize_prompt_input(text: str | None) -> str:
+    """Sanitize user-provided prompt strings to prevent delimiter and tag injection."""
+    if not text:
+        return ""
+    # Neutralize block delimiter headers that mimic prompt structure
+    cleaned = re.sub(
+        r"(?i)###\s*(block\s*\d+|user\s*question|historical|instructions|persona|user\s*goals)",
+        r"[USER_INPUT: \1]",
+        text,
+    )
+    # Strip output formatting tag spoofing
+    cleaned = re.sub(r"(?i)</?summary>", "", cleaned)
+    return cleaned.strip()
+
+
+def _format_metric_val(val: Any, unit: str = "", pending_note: str = "") -> str:
+    """Format metric value, returning N/A with optional pending note if None."""
     if val is None:
-        return "N/A"
+        return f"N/A ({pending_note})" if pending_note else "N/A"
     return f"{val}{unit}"
 
 
@@ -38,8 +53,8 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
         f"- Total Calories: {_format_metric_val(metrics.total_calories, ' kcal')}",
         f"- Resting Heart Rate: {_format_metric_val(metrics.resting_hr, ' bpm')}",
         f"- Average Stress Level: {_format_metric_val(metrics.avg_stress)}",
-        f"- Sleep Score: {_format_metric_val(metrics.sleep_score)}",
-        f"- HRV Status: {_format_metric_val(metrics.hrv_status)}",
+        f"- Sleep Score: {_format_metric_val(metrics.sleep_score, pending_note='Pending sync or watch not worn')}",
+        f"- HRV Status: {_format_metric_val(metrics.hrv_status, pending_note='Pending sync or not calculated')}",
         f"- Body Battery (Min/Max): {_format_metric_val(metrics.body_battery_min)} / {_format_metric_val(metrics.body_battery_max)}",
         f"- Weight: {_format_metric_val(metrics.weight_kg, ' kg')}",
     ]
@@ -172,11 +187,13 @@ def assemble_report_prompt(
     history_list = history or []
     block2_content, _ = truncate_history_context(history_list, max_chars=max_history_chars)
 
-    # Block 3: User Goals & Profile
-    block3_content = (user_goals or "").strip() or DEFAULT_USER_GOALS
+    # Block 3: User Goals & Profile (Sanitized)
+    sanitized_goals = sanitize_prompt_input(user_goals)
+    block3_content = sanitized_goals or DEFAULT_USER_GOALS
 
-    # Block 4: Persona Directives & Tone
-    block4_content = (coaching_directives or "").strip() or DEFAULT_COACHING_DIRECTIVES
+    # Block 4: Persona Directives & Tone (Sanitized)
+    sanitized_directives = sanitize_prompt_input(coaching_directives)
+    block4_content = sanitized_directives or DEFAULT_COACHING_DIRECTIVES
 
     # Block 5: Structural Output Formatting Rules
     block5_content = (
@@ -189,7 +206,8 @@ def assemble_report_prompt(
         "   - ## Summary & Recovery Status\n"
         "   - ## Sleep & Stress Analysis\n"
         "   - ## Activity & Performance\n"
-        "   - ## Actionable Recommendations for Tomorrow"
+        "   - ## Actionable Recommendations for Tomorrow\n"
+        "4. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep."
     )
 
     prompt = (
@@ -221,12 +239,16 @@ def assemble_qa_prompt(
         history_list, max_chars=max_history_chars
     )
 
-    block_goals = (user_goals or "").strip() or DEFAULT_USER_GOALS
-    block_directives = (coaching_directives or "").strip() or DEFAULT_COACHING_DIRECTIVES
+    sanitized_question = sanitize_prompt_input(question)
+    sanitized_goals = sanitize_prompt_input(user_goals)
+    sanitized_directives = sanitize_prompt_input(coaching_directives)
+
+    block_goals = sanitized_goals or DEFAULT_USER_GOALS
+    block_directives = sanitized_directives or DEFAULT_COACHING_DIRECTIVES
 
     prompt = (
         f"### USER QUESTION\n"
-        f"{question.strip()}\n\n"
+        f"{sanitized_question}\n\n"
         "### HISTORICAL METRICS CONTEXT\n"
         f"{block_history_content}\n\n"
         "### USER GOALS & PROFILE\n"

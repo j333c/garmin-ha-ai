@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from urllib.parse import urlparse
+
 from ..const import FALLBACK_OPENAI_MODELS
 from .base import (
     AIEngineClientError,
@@ -17,6 +19,28 @@ from .base import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+DISALLOWED_HOSTS = frozenset({
+    "169.254.169.254",
+    "metadata.google.internal",
+    "instance-data",
+})
+
+
+def validate_base_url(base_url: str | None) -> str:
+    """Validate and normalize base_url, allowing http/https (local & remote) while blocking cloud metadata endpoints."""
+    url = (base_url or "https://api.openai.com/v1").strip().rstrip("/")
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise AIEngineClientError(
+            f"Invalid base_url scheme '{parsed.scheme}'. Must be 'http' or 'https'."
+        )
+    hostname = (parsed.hostname or "").lower()
+    if hostname in DISALLOWED_HOSTS:
+        raise AIEngineClientError(
+            f"Access to cloud metadata service '{hostname}' is prohibited."
+        )
+    return url
 
 
 class OpenAIProvider(BaseAIProvider):
@@ -32,7 +56,7 @@ class OpenAIProvider(BaseAIProvider):
         **kwargs: Any,
     ) -> None:
         """Initialize OpenAI provider."""
-        url = (base_url or "https://api.openai.com/v1").rstrip("/")
+        url = validate_base_url(base_url)
         super().__init__(api_key=api_key, model=model, base_url=url)
         self.timeout = timeout
         self.hass = hass
@@ -127,7 +151,10 @@ async def async_list_openai_models(
     timeout: float = 10.0,
 ) -> list[str]:
     """Fetch available models from OpenAI or OpenAI-compatible endpoint asynchronously."""
-    url = (base_url or "https://api.openai.com/v1").rstrip("/")
+    try:
+        url = validate_base_url(base_url)
+    except AIEngineClientError:
+        return list(FALLBACK_OPENAI_MODELS)
 
     # If default endpoint and no API key, return fallback immediately
     if not api_key and "api.openai.com" in url:

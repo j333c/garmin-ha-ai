@@ -241,3 +241,56 @@ async def test_generate_report_service_call(
     )
 
     mock_coordinator.async_generate_report.assert_called_once_with(force=True)
+
+
+@pytest.mark.asyncio
+async def test_services_multi_entry_targeting(
+    hass: HomeAssistant, mock_storage
+):
+    """Test services correctly route when entry_id is specified."""
+    await async_setup_services(hass)
+
+    coord_1 = MagicMock()
+    coord_1.async_ask_question = AsyncMock(return_value="Answer from Entry 1")
+    coord_1.async_generate_report = AsyncMock()
+
+    coord_2 = MagicMock()
+    coord_2.async_ask_question = AsyncMock(return_value="Answer from Entry 2")
+    coord_2.async_generate_report = AsyncMock()
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["entry_1"] = {"storage": mock_storage, "coordinator": coord_1}
+    hass.data[DOMAIN]["entry_2"] = {"storage": mock_storage, "coordinator": coord_2}
+
+    # Target entry_2 specifically
+    res = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_ASK_QUESTION,
+        {"question": "How am I doing?", "entry_id": "entry_2"},
+        blocking=True,
+        return_response=True,
+    )
+    assert res["answer"] == "Answer from Entry 2"
+    coord_2.async_ask_question.assert_called_once()
+    coord_1.async_ask_question.assert_not_called()
+
+    # Target entry_1 for generate_report
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GENERATE_REPORT,
+        {"entry_id": "entry_1"},
+        blocking=True,
+    )
+    coord_1.async_generate_report.assert_called_once_with(force=True)
+    coord_2.async_generate_report.assert_not_called()
+
+    # Invalid entry_id raises HomeAssistantError
+    with pytest.raises(HomeAssistantError, match="not found"):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_ASK_QUESTION,
+            {"question": "How am I doing?", "entry_id": "nonexistent_entry"},
+            blocking=True,
+            return_response=True,
+        )
+

@@ -1,6 +1,14 @@
 generate_report:
   name: Generate AI Health Report
   description: Manually triggers Garmin daily health data extraction and AI health report generation with notification dispatch.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: Optional config entry ID to target a specific Garmin account. If omitted, triggers all configured entries.
+      required: false
+      example: "01J5K9..."
+      selector:
+        text:
 
 ask_question:
   name: Ask AI Health Coach
@@ -33,3 +41,10 @@ ask_question:
       selector:
         entity:
           domain: sensor
+    entry_id:
+      name: Config Entry ID
+      description: Optional config entry ID to target a specific Garmin account. If omitted, targets the primary active entry.
+      required: false
+      example: "01J5K9..."
+      selector:
+        text:

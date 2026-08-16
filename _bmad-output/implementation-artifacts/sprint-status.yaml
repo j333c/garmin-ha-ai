@@ -68,4 +68,11 @@ development_status:
   4-5-garmin-429-rate-limit-resilience-auth-flow-isolation: done
   epic-4-retrospective: done
 
+  epic-5: backlog
+  5-1-7-day-pre-computed-trend-and-baseline-analytics-engine: backlog
+  5-2-rich-activity-ingestion-and-heart-rate-zone-extraction: backlog
+  5-3-home-assistant-ambient-context-injection: backlog
+  epic-5-retrospective: optional
+
+
 
