@@ -8,6 +8,7 @@ import pytest
 from custom_components.garmin_ha_ai.frontend import (
     FRONTEND_FILE_PATH,
     FRONTEND_URL,
+    FRONTEND_URL_VERSIONED,
     async_setup_frontend,
 )
 
@@ -56,7 +57,7 @@ async def test_async_setup_frontend_registers_static_path_and_extra_js(hass):
         assert call_args[0].path == str(FRONTEND_FILE_PATH)
 
         # Check extra js url was added
-        mock_add_js.assert_called_once_with(hass, FRONTEND_URL)
+        mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
 
 
 async def test_async_setup_frontend_idempotent(hass):
@@ -88,7 +89,7 @@ async def test_async_setup_frontend_fallback_register_static_path(hass):
             str(FRONTEND_FILE_PATH),
             cache_headers=True,
         )
-        mock_add_js.assert_called_once_with(hass, FRONTEND_URL)
+        mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
 
 
 async def test_async_setup_frontend_handles_exceptions_gracefully(hass):

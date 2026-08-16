@@ -1,6 +1,7 @@
 """Frontend registration for Garmin HA AI Lovelace custom cards."""
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -13,6 +14,17 @@ FRONTEND_JS_FILE = "garmin-ha-ai-cards.js"
 FRONTEND_URL = f"{FRONTEND_URL_BASE}/{FRONTEND_JS_FILE}"
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_FILE_PATH = FRONTEND_DIR / FRONTEND_JS_FILE
+MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+
+VERSION = "0.1.2"
+if MANIFEST_PATH.exists():
+    try:
+        manifest_data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        VERSION = manifest_data.get("version", "0.1.2")
+    except Exception:
+        pass
+
+FRONTEND_URL_VERSIONED = f"{FRONTEND_URL}?v={VERSION}"
 
 _FRONTEND_REGISTERED = False
 
@@ -54,12 +66,12 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         except Exception as err:
             LOGGER.warning("Could not register static path for Garmin HA AI cards: %s", err)
 
-    # 2. Add extra JS URL to Home Assistant frontend so Lovelace loads it automatically
+    # 2. Add extra JS URL to Home Assistant frontend so Lovelace loads it automatically with cache-busting
     try:
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, FRONTEND_URL)
-        LOGGER.info("Successfully registered Garmin HA AI custom Lovelace cards: %s", FRONTEND_URL)
+        add_extra_js_url(hass, FRONTEND_URL_VERSIONED)
+        LOGGER.info("Successfully registered Garmin HA AI custom Lovelace cards: %s", FRONTEND_URL_VERSIONED)
         _FRONTEND_REGISTERED = True
     except (ImportError, AttributeError, Exception) as err:
         LOGGER.debug("Could not add extra JS URL to frontend (may be running in test or headless mode): %s", err)

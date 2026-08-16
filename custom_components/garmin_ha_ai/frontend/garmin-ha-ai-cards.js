@@ -464,13 +464,18 @@
       }
     }
 
-    static getStubConfig() {
+    static getStubConfig(hass) {
+      const findEntity = (prefix, fallback) => {
+        if (!hass || !hass.states) return fallback;
+        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
+        return match || fallback;
+      };
       return {
         type: "custom:garmin-ha-ai-qa-card",
         title: "Garmin AI Coach Q&A",
-        question_entity: "text.garmin_ai_question",
-        button_entity: "button.garmin_ai_ask_question",
-        answer_entity: "sensor.garmin_ai_last_answer",
+        question_entity: findEntity("text.garmin_ai", "text.garmin_ai_question"),
+        button_entity: findEntity("button.garmin_ai_ask", "button.garmin_ai_ask_question"),
+        answer_entity: findEntity("sensor.garmin_ai_last_answer", "sensor.garmin_ai_last_answer"),
       };
     }
 
@@ -566,12 +571,21 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass || !this._config) return;
+      if (!this.shadowRoot || !this._config) return;
 
       const errorBox = this.shadowRoot.getElementById("errorBox");
       const answerBox = this.shadowRoot.getElementById("answerBox");
       const askBtn = this.shadowRoot.getElementById("askBtn");
       if (!answerBox) return;
+
+      if (!this._hass) {
+        answerBox.innerHTML = `
+          <div class="garmin-empty-state">
+            Type a question above and click "Ask" to consult your AI Health Coach.
+          </div>
+        `;
+        return;
+      }
 
       // Render Error Banner if active
       if (errorBox) {
@@ -714,15 +728,20 @@
       }
     }
 
-    static getStubConfig() {
+    static getStubConfig(hass) {
+      const findEntity = (prefix, fallback) => {
+        if (!hass || !hass.states) return fallback;
+        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
+        return match || fallback;
+      };
       return {
         type: "custom:garmin-ha-ai-report-card",
         title: "Garmin AI Health Report",
-        report_entity: "sensor.garmin_ai_health_report_long",
-        short_report_entity: "sensor.garmin_ai_health_report_short",
-        selected_report_entity: "sensor.garmin_ai_selected_report",
-        generate_button_entity: "button.garmin_ai_generate_report",
-        last_update_entity: "sensor.garmin_ai_last_update",
+        report_entity: findEntity("sensor.garmin_ai_health_report_long", "sensor.garmin_ai_health_report_long"),
+        short_report_entity: findEntity("sensor.garmin_ai_health_report_short", "sensor.garmin_ai_health_report_short"),
+        selected_report_entity: findEntity("sensor.garmin_ai_selected_report", "sensor.garmin_ai_selected_report"),
+        generate_button_entity: findEntity("button.garmin_ai_generate_report", "button.garmin_ai_generate_report"),
+        last_update_entity: findEntity("sensor.garmin_ai_last_update", "sensor.garmin_ai_last_update"),
       };
     }
 
@@ -753,7 +772,9 @@
             <button class="garmin-tab-btn ${this._viewMode === "dynamic" ? "active" : ""}" data-mode="dynamic">Dynamic View</button>
           </div>
           <div class="garmin-content-box" id="reportBox">
-            <div class="garmin-empty-state">Loading report...</div>
+            <div class="garmin-empty-state">
+              No health report generated yet. Click "Regenerate" to generate a personalized briefing.
+            </div>
           </div>
         </ha-card>
       `;
@@ -800,11 +821,20 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass || !this._config) return;
+      if (!this.shadowRoot || !this._config) return;
 
       const reportBox = this.shadowRoot.getElementById("reportBox");
       const errorBox = this.shadowRoot.getElementById("reportErrorBox");
       if (!reportBox) return;
+
+      if (!this._hass) {
+        reportBox.innerHTML = `
+          <div class="garmin-empty-state">
+            No health report generated yet. Click "Regenerate" to generate a personalized briefing.
+          </div>
+        `;
+        return;
+      }
 
       // Render Error Banner
       if (errorBox) {
@@ -936,10 +966,23 @@
       }
     }
 
-    static getStubConfig() {
+    static getStubConfig(hass) {
+      const findEntity = (prefix, fallback) => {
+        if (!hass || !hass.states) return fallback;
+        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
+        return match || fallback;
+      };
       return {
         type: "custom:garmin-ha-ai-overview-card",
         title: "Garmin AI Health Coach",
+        steps_entity: findEntity("sensor.garmin_steps", "sensor.garmin_steps"),
+        sleep_entity: findEntity("sensor.garmin_sleep_score", "sensor.garmin_sleep_score"),
+        battery_entity: findEntity("sensor.garmin_body_battery", "sensor.garmin_body_battery"),
+        stress_entity: findEntity("sensor.garmin_stress_level", "sensor.garmin_stress_level"),
+        hr_entity: findEntity("sensor.garmin_resting_heart_rate", "sensor.garmin_resting_heart_rate"),
+        short_report_entity: findEntity("sensor.garmin_ai_health_report_short", "sensor.garmin_ai_health_report_short"),
+        long_report_entity: findEntity("sensor.garmin_ai_health_report_long", "sensor.garmin_ai_health_report_long"),
+        answer_entity: findEntity("sensor.garmin_ai_last_answer", "sensor.garmin_ai_last_answer"),
       };
     }
 
@@ -959,8 +1002,14 @@
               <span>${this._config.title}</span>
             </div>
           </div>
-          <div class="garmin-glance-bar" id="glanceBar"></div>
-          <div class="garmin-focus-banner" id="focusBanner"></div>
+          <div class="garmin-glance-bar" id="glanceBar">
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Sleep</div><div class="garmin-metric-val">--%</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Battery</div><div class="garmin-metric-val">--%</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Stress</div><div class="garmin-metric-val">--</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Rest HR</div><div class="garmin-metric-val">--</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Steps</div><div class="garmin-metric-val">--</div></div>
+          </div>
+          <div class="garmin-focus-banner" id="focusBanner"><strong>💡 Today's Focus:</strong> Ready for today's workout and recovery guidance.</div>
           <div id="overviewErrorBox"></div>
           <div class="garmin-tab-bar">
             <button class="garmin-tab-btn active" data-tab="qa">💬 Ask Coach</button>
@@ -975,10 +1024,14 @@
                   <span>Ask</span>
                 </button>
               </div>
-              <div class="garmin-content-box" id="overviewAnswerBox"></div>
+              <div class="garmin-content-box" id="overviewAnswerBox">
+                <div class="garmin-empty-state">Type a coaching question above.</div>
+              </div>
             </div>
             <div id="reportSection" style="display: none;">
-              <div class="garmin-content-box" id="overviewReportBox"></div>
+              <div class="garmin-content-box" id="overviewReportBox">
+                <div class="garmin-empty-state">No full report generated yet.</div>
+              </div>
             </div>
           </div>
         </ha-card>
@@ -1051,13 +1104,35 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass || !this._config) return;
+      if (!this.shadowRoot || !this._config) return;
 
       const glanceBar = this.shadowRoot.getElementById("glanceBar");
       const focusBanner = this.shadowRoot.getElementById("focusBanner");
       const errorBox = this.shadowRoot.getElementById("overviewErrorBox");
       const answerBox = this.shadowRoot.getElementById("overviewAnswerBox");
       const reportBox = this.shadowRoot.getElementById("overviewReportBox");
+
+      if (!this._hass) {
+        if (glanceBar) {
+          glanceBar.innerHTML = `
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Sleep</div><div class="garmin-metric-val">--%</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Battery</div><div class="garmin-metric-val">--%</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Stress</div><div class="garmin-metric-val">--</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Rest HR</div><div class="garmin-metric-val">--</div></div>
+            <div class="garmin-metric-pill"><div class="garmin-metric-label">Steps</div><div class="garmin-metric-val">--</div></div>
+          `;
+        }
+        if (focusBanner) {
+          focusBanner.innerHTML = `<strong>💡 Today's Focus:</strong> Ready for today's workout and recovery guidance.`;
+        }
+        if (answerBox) {
+          answerBox.innerHTML = `<div class="garmin-empty-state">Type a coaching question above.</div>`;
+        }
+        if (reportBox) {
+          reportBox.innerHTML = `<div class="garmin-empty-state">No full report generated yet.</div>`;
+        }
+        return;
+      }
 
       // Update Error Banner
       if (errorBox) {
