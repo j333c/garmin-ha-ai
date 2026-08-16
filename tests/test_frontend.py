@@ -51,12 +51,14 @@ async def test_async_setup_frontend_registers_static_path_and_extra_js(hass):
     with patch("homeassistant.components.frontend.add_extra_js_url") as mock_add_js:
         await async_setup_frontend(hass)
 
-        # Check static path was registered
+        # Check static paths were registered
         hass.http.async_register_static_paths.assert_called_once()
         call_args = hass.http.async_register_static_paths.call_args[0][0]
-        assert len(call_args) == 1
+        assert len(call_args) == 2
         assert call_args[0].url_path == FRONTEND_URL_BASE
         assert call_args[0].path == str(FRONTEND_DIR)
+        assert call_args[1].url_path == FRONTEND_URL
+        assert call_args[1].path == str(FRONTEND_FILE_PATH)
 
         # Check extra js url was added
         mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
