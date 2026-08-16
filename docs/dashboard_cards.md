@@ -72,7 +72,7 @@ sections:
 
       - type: markdown
         title: 💡 Daily Coach Briefing
-        content: >
+        content: |
           <div style="padding: 12px; border-left: 4px solid var(--primary-color, #03a9f4); background: var(--card-background-color, rgba(0,0,0,0.03)); border-radius: 4px;">
 
           **Recommendation:** {{ states('sensor.garmin_ai_health_report_short') }}
@@ -92,7 +92,7 @@ sections:
 
       - type: markdown
         title: 🤖 Latest Coach Answer
-        content: >
+        content: |
           <div style="resize: vertical; overflow: auto; min-height: 140px; max-height: 500px; padding: 12px; border: 1px solid var(--divider-color, rgba(255,255,255,0.12)); border-radius: 8px;">
 
           {% if is_state('sensor.garmin_ai_last_answer', 'No question asked yet') %}
@@ -121,7 +121,7 @@ sections:
             name: Last Sync & Update
 
       - type: markdown
-        content: >
+        content: |
           <div style="resize: vertical; overflow: auto; min-height: 220px; max-height: 700px; padding: 14px; border: 1px solid var(--divider-color, rgba(255,255,255,0.12)); border-radius: 8px;">
 
           {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') | default('No detailed report generated yet. Tap "Refresh Report Now" above.', true) }}
@@ -154,7 +154,7 @@ cards:
         name: Steps
 
   - type: markdown
-    content: >
+    content: |
       <div style="padding: 10px 14px; border-left: 4px solid var(--primary-color, #03a9f4); background: var(--card-background-color, rgba(0,0,0,0.03)); border-radius: 6px; font-size: 14px;">
       🤖 <strong>Today's Focus:</strong> {{ states('sensor.garmin_ai_health_report_short') }}
       </div>
@@ -170,7 +170,7 @@ cards:
         name: Ask Coach
 
   - type: markdown
-    content: >
+    content: |
       <div style="resize: vertical; overflow: auto; min-height: 120px; max-height: 400px; padding: 12px; border: 1px solid var(--divider-color, rgba(255,255,255,0.12)); border-radius: 8px;">
       {% if is_state('sensor.garmin_ai_last_answer', 'No question asked yet') %}
         *Type a coaching question above and press "Ask Coach".*
@@ -189,7 +189,7 @@ cards:
         name: Refresh Daily Report
 
   - type: markdown
-    content: >
+    content: |
       <div style="resize: vertical; overflow: auto; min-height: 200px; max-height: 600px; padding: 14px; border: 1px solid var(--divider-color, rgba(255,255,255,0.12)); border-radius: 8px;">
       {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
       </div>
@@ -222,7 +222,7 @@ cards:
       - entity: sensor.garmin_steps
         name: Steps
   - type: markdown
-    content: >
+    content: |
       **AI Coach Recommendation:** {{ states('sensor.garmin_ai_health_report_short') }}
 ```
 
@@ -244,7 +244,7 @@ cards:
       - entity: button.garmin_ai_ask_question
         name: Send Question
   - type: markdown
-    content: >
+    content: |
       <div style="resize: vertical; overflow: auto; min-height: 120px; max-height: 450px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
 
       {% if is_state('sensor.garmin_ai_last_answer', 'No question asked yet') %}
@@ -275,7 +275,7 @@ cards:
       - entity: sensor.garmin_ai_last_update
         name: Last Updated
   - type: markdown
-    content: >
+    content: |
       <div style="resize: vertical; overflow: auto; min-height: 200px; max-height: 650px; padding: 14px; border: 1px solid var(--divider-color); border-radius: 8px;">
 
       {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
@@ -305,7 +305,7 @@ cards:
         name: Refresh Report
 
   - type: markdown
-    content: >
+    content: |
       <div style="resize: vertical; overflow: auto; min-height: 140px; max-height: 600px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
 
       {{ state_attr('sensor.garmin_ai_selected_report', 'report_text') }}
