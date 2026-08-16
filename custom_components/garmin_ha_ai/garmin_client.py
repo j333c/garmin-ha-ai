@@ -5,11 +5,23 @@ import logging
 from datetime import date
 from typing import Any
 
-from garminconnect import (
-    Garmin,
-    GarminConnectAuthenticationError,
-    GarminConnectConnectionError,
-)
+try:
+    from garminconnect import (
+        Garmin,
+        GarminConnectAuthenticationError,
+        GarminConnectConnectionError,
+        GarminConnectTooManyRequestsError,
+    )
+except ImportError:
+    from garminconnect import (  # type: ignore[no-redef]
+        Garmin,
+        GarminConnectAuthenticationError,
+        GarminConnectConnectionError,
+    )
+
+    class GarminConnectTooManyRequestsError(GarminConnectConnectionError):  # type: ignore[no-redef]
+        """Fallback exception for Garmin rate limiting."""
+
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 import homeassistant.util.dt as dt_util
@@ -24,6 +36,10 @@ class GarminMfaRequired(Exception):
 
 
 GarminConnectMfaRequired = GarminMfaRequired
+
+
+class GarminRateLimitError(GarminConnectConnectionError):
+    """Exception raised when Garmin Connect rate-limits requests (HTTP 429)."""
 
 
 class GarminClient:
@@ -68,13 +84,28 @@ class GarminClient:
             LOGGER.debug("Garmin session successfully restored from tokens")
             await self._async_save_current_tokens()
             return True
-        except (GarminConnectAuthenticationError, KeyError) as err:
-            LOGGER.warning("Garmin OAuth token authentication failed: %s", err)
-            raise ConfigEntryAuthFailed("Garmin OAuth tokens expired or revoked") from err
+        except (GarminConnectTooManyRequestsError, GarminRateLimitError) as err:
+            LOGGER.warning("Garmin Connect rate limit (HTTP 429) during token restore: %s", err)
+            raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
         except GarminConnectConnectionError as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                LOGGER.warning("Garmin Connect rate limit (HTTP 429): %s", err)
+                raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
             LOGGER.warning("Network error restoring Garmin session: %s", err)
             raise
+        except (GarminConnectAuthenticationError, KeyError) as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                LOGGER.warning("Garmin Connect rate limit (HTTP 429) during auth: %s", err)
+                raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
+            LOGGER.warning("Garmin OAuth token authentication failed: %s", err)
+            raise ConfigEntryAuthFailed("Garmin OAuth tokens expired or revoked") from err
         except Exception as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                LOGGER.warning("Garmin Connect rate limit (HTTP 429): %s", err)
+                raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
             LOGGER.error("Unexpected error restoring Garmin session: %s", err)
             raise ConfigEntryAuthFailed("Unexpected error during Garmin token authentication") from err
 
@@ -123,12 +154,20 @@ class GarminClient:
             self.client = await self.hass.async_add_executor_job(_credential_login)
             LOGGER.info("Successfully authenticated with Garmin Connect")
             return await self._async_save_current_tokens()
-        except (GarminMfaRequired, GarminConnectConnectionError):
+        except (GarminMfaRequired, GarminRateLimitError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
             raise
         except GarminConnectAuthenticationError as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                LOGGER.warning("Garmin Connect rate limit (HTTP 429) during login: %s", err)
+                raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
             LOGGER.warning("Garmin authentication failed")
             raise ConfigEntryAuthFailed("Invalid Garmin credentials") from err
         except Exception as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                LOGGER.warning("Garmin Connect rate limit (HTTP 429) during login: %s", err)
+                raise GarminRateLimitError(f"Garmin rate limit reached: {err}") from err
             LOGGER.error("Error during Garmin credential authentication: %s", err)
             raise ConfigEntryAuthFailed("Garmin authentication failed") from err
 

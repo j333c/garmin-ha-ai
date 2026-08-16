@@ -39,7 +39,7 @@ def test_get_ai_provider_factory() -> None:
     """Test get_ai_provider factory function instantiation and defaults."""
     gemini = get_ai_provider("gemini", api_key="test_key")
     assert isinstance(gemini, GeminiProvider)
-    assert gemini.model == "gemini-2.0-flash"
+    assert gemini.model == "gemini-2.5-flash"
 
     openai = get_ai_provider("openai", api_key="test_key")
     assert isinstance(openai, OpenAIProvider)
@@ -73,7 +73,7 @@ async def test_gemini_provider_success() -> None:
         mock_client.aio.models = mock_aio_models
         mock_client_cls.return_value = mock_client
 
-        provider = GeminiProvider(api_key="fake_key", model="gemini-2.0-flash")
+        provider = GeminiProvider(api_key="fake_key", model="gemini-2.5-flash")
         result = await provider.async_generate_response(
             prompt="Analyze my stats", system_instruction="You are a health coach"
         )
@@ -102,6 +102,62 @@ async def test_gemini_provider_quota_error() -> None:
 
         # Quota errors fail immediately without retry
         assert mock_aio_models.generate_content.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_404_client_error_no_retry() -> None:
+    """Test GeminiProvider maps API 404 error to AIEngineClientError and fails immediately without retry."""
+    from custom_components.garmin_ha_ai.ai_engine.base import AIEngineClientError
+    from google.genai import errors as genai_errors
+
+    with patch("custom_components.garmin_ha_ai.ai_engine.gemini.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_aio_models = MagicMock()
+
+        api_error = genai_errors.APIError(
+            404,
+            "This model models/gemini-2.0-flash is no longer available. Please update your code.",
+            None,
+        )
+        mock_aio_models.generate_content = AsyncMock(side_effect=api_error)
+        mock_client.aio.models = mock_aio_models
+        mock_client_cls.return_value = mock_client
+
+        provider = GeminiProvider(api_key="fake_key", model="gemini-2.0-flash")
+        with pytest.raises(AIEngineClientError):
+            await provider.async_generate_response("Test prompt")
+
+        # Must NOT retry on 404
+        assert mock_aio_models.generate_content.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_async_list_gemini_models() -> None:
+    """Test dynamic model discovery from Gemini API."""
+    from custom_components.garmin_ha_ai.ai_engine.gemini import async_list_gemini_models
+
+    # Case 1: Empty API key returns fallback models
+    models = await async_list_gemini_models(api_key="")
+    assert "gemini-2.5-flash" in models
+
+    # Case 2: API returns model objects
+    mock_model_1 = MagicMock()
+    mock_model_1.name = "models/gemini-2.5-flash"
+    mock_model_2 = MagicMock()
+    mock_model_2.name = "models/gemini-2.5-pro"
+    mock_model_other = MagicMock()
+    mock_model_other.name = "models/embedding-001"
+
+    with patch("custom_components.garmin_ha_ai.ai_engine.gemini.genai.Client") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = [mock_model_1, mock_model_2, mock_model_other]
+        mock_client_cls.return_value = mock_client
+
+        discovered = await async_list_gemini_models(api_key="valid_key")
+        assert "gemini-2.5-flash" in discovered
+        assert "gemini-2.5-pro" in discovered
+        assert "models/gemini-2.5-flash" not in discovered
+        assert "embedding-001" not in discovered
 
 
 @pytest.mark.asyncio

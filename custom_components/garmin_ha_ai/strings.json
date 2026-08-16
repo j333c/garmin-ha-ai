@@ -49,12 +49,19 @@
           "fitness_goals": "Fitness & Health Goals",
           "coaching_directives": "AI Coaching Directives & Tone",
           "notification_targets": "Notification Target Services (comma-separated)",
-          "polling_schedule": "Daily Polling Schedule (HH:MM:SS)",
+          "polling_schedule": "Daily Polling Schedule",
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API Key",
-          "ai_model": "AI Model Name",
+          "ai_model": "AI Model",
           "ai_base_url": "AI Base URL (for generic OpenAI/local endpoints)"
         }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "generate_report": {
+        "name": "Generate AI Health Report"
       }
     }
   }

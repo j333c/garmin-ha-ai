@@ -11,7 +11,7 @@ LOGGER: logging.Logger = logging.getLogger(__package__)
 DOMAIN: Final[str] = "garmin_ha_ai"
 DEFAULT_NAME: Final[str] = "Garmin HA AI"
 
-PLATFORMS: Final[list[Platform]] = [Platform.SENSOR]
+PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BUTTON]
 
 # Configuration Keys - Garmin Credentials
 CONF_GARMIN_USERNAME: Final[str] = "username"
@@ -37,9 +37,25 @@ PROVIDER_OPENAI: Final[str] = "openai"
 
 # Default Configuration Values
 DEFAULT_AI_PROVIDER: Final[str] = PROVIDER_GEMINI
-DEFAULT_AI_MODEL_GEMINI: Final[str] = "gemini-2.0-flash"
+DEFAULT_AI_MODEL_GEMINI: Final[str] = "gemini-2.5-flash"
 DEFAULT_AI_MODEL_OPENAI: Final[str] = "gpt-4o"
 DEFAULT_AI_BASE_URL: Final[str] = "https://api.openai.com/v1"
+
+FALLBACK_GEMINI_MODELS: Final[list[str]] = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-lite",
+]
+
+FALLBACK_OPENAI_MODELS: Final[list[str]] = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "o1",
+    "o3-mini",
+]
 
 DEFAULT_RETENTION_DAYS: Final[int] = 30
 MIN_RETENTION_DAYS: Final[int] = 7

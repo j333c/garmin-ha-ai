@@ -59,3 +59,13 @@ development_status:
   3-2-last-answer-sensor-entity-interactive-lovelace-q-a-card-patt: done
   3-3-ui-options-flow-retention-window-management-options_flow-py: done
   epic-3-retrospective: done
+
+  epic-4: done
+  4-1-sensor-timestamp-datetime-type-correction-event-loop-non-blo: done
+  4-2-gemini-model-dynamic-discovery-dropdown-selector-modern-def: done
+  4-3-options-flow-time-picker-schedule-selector-refinement: done
+  4-4-on-demand-report-button-entity-interactive-qa-dashboard-patt: done
+  4-5-garmin-429-rate-limit-resilience-auth-flow-isolation: done
+  epic-4-retrospective: done
+
+

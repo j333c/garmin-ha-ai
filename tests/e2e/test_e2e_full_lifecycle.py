@@ -115,8 +115,13 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
     hass.config_entries = MagicMock()
     async def mock_forward_setups(entry, platforms):
         for platform in platforms:
-            if platform in PLATFORMS or str(platform) == "sensor" or str(platform).endswith("sensor"):
+            if str(platform) == "sensor" or str(platform).endswith("sensor"):
                 await sensor_setup_entry(hass, entry, mock_add_entities)
+            elif str(platform) == "button" or str(platform).endswith("button"):
+                from custom_components.garmin_ha_ai.button import (
+                    async_setup_entry as button_setup_entry,
+                )
+                await button_setup_entry(hass, entry, mock_add_entities)
         return True
 
     hass.config_entries.async_forward_entry_setups = AsyncMock(
@@ -169,8 +174,10 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         assert coordinator.data == mock_metrics
         mock_save_history.assert_called_once_with(mock_metrics.to_dict())
 
-        # Verify all 10 sensor entities were created and attached
-        assert len(registered_entities) == 10
+        # Verify all 10 sensor entities and 1 button entity were created and attached
+        assert len(registered_entities) == 11
+        sensor_entities = [e for e in registered_entities if not hasattr(e, "async_press")]
+        assert len(sensor_entities) == 10
         
         # Verify steps sensor
         steps_sensor = next(e for e in registered_entities if getattr(e, "entity_description", None) and e.entity_description.key == "steps")

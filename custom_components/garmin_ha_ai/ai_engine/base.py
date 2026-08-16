@@ -24,6 +24,10 @@ class AIEngineQuotaError(AIEngineError):
     """Exception raised when AI provider quota or rate limit is exceeded."""
 
 
+class AIEngineClientError(AIEngineError):
+    """Exception raised when AI provider returns a non-retryable 4xx client error (e.g. 404 model not found, 400 invalid request)."""
+
+
 class BaseAIProvider(ABC):
     """Abstract base class for pluggable AI engine drivers."""
 

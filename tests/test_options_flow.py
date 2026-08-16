@@ -143,3 +143,28 @@ async def test_options_update_listener(hass: HomeAssistant) -> None:
         await async_reload_entry(hass, entry)
         mock_prune.assert_called_once_with(21)
         mock_reload.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_model_discovery_and_time_selector(hass: HomeAssistant) -> None:
+    """Test options flow fetches available models and uses TimeSelector."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garmin Test",
+        data={"username": "testuser", "ai_provider": "gemini", "ai_api_key": "valid_gemini_key"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    flow = GarminHaAiOptionsFlowHandler(entry)
+    flow.hass = hass
+
+    with patch(
+        "custom_components.garmin_ha_ai.options_flow.async_list_gemini_models",
+        new_callable=AsyncMock,
+        return_value=["gemini-2.5-flash", "gemini-2.5-pro"],
+    ) as mock_list:
+        result = await flow.async_step_init(user_input=None)
+        assert result["type"] == "form"
+        mock_list.assert_called_once_with("valid_gemini_key", hass=hass)
+

@@ -49,12 +49,19 @@
           "fitness_goals": "Fitness- & Gesundheitsziele",
           "coaching_directives": "AI-Coaching-Vorgaben & Tonalität",
           "notification_targets": "Benachrichtigungsdienste (kommagetrennt)",
-          "polling_schedule": "Tägliche Abrufzeit (HH:MM:SS)",
+          "polling_schedule": "Tägliche Abrufzeit",
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API-Schlüssel",
-          "ai_model": "AI Modellname",
+          "ai_model": "AI Modell",
           "ai_base_url": "AI Basis-URL (für OpenAI-kompatible/lokale Endpunkte)"
         }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "generate_report": {
+        "name": "AI-Gesundheitsbericht generieren"
       }
     }
   }

@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from .base import (
+    AIEngineClientError,
     AIEngineError,
     AIEngineQuotaError,
     AIEngineTimeoutError,
@@ -64,6 +65,11 @@ class OpenAIProvider(BaseAIProvider):
                         f"OpenAI API rate limit / quota exceeded (429): {response.text}"
                     )
 
+                if response.status_code in (400, 401, 403, 404):
+                    raise AIEngineClientError(
+                        f"OpenAI API client error ({response.status_code}): {response.text}"
+                    )
+
                 if response.status_code >= 500:
                     raise AIEngineError(
                         f"OpenAI API server error ({response.status_code}): {response.text}"
@@ -85,6 +91,8 @@ class OpenAIProvider(BaseAIProvider):
             except httpx.HTTPStatusError as err:
                 if err.response.status_code == 429:
                     raise AIEngineQuotaError(f"OpenAI API quota error: {err}") from err
+                if err.response.status_code in (400, 401, 403, 404):
+                    raise AIEngineClientError(f"OpenAI API client error: {err}") from err
                 raise AIEngineError(f"OpenAI API HTTP error: {err}") from err
             except httpx.RequestError as err:
                 raise AIEngineError(f"OpenAI API network request error: {err}") from err
@@ -96,5 +104,5 @@ class OpenAIProvider(BaseAIProvider):
             max_retries=2,
             initial_delay=1.0,
             retry_exceptions=(AIEngineError, AIEngineTimeoutError),
-            exclude_exceptions=(AIEngineQuotaError,),
+            exclude_exceptions=(AIEngineQuotaError, AIEngineClientError),
         )

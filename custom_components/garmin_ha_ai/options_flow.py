@@ -8,7 +8,9 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 
+from .ai_engine import async_list_gemini_models
 from .const import (
     CONF_AI_API_KEY,
     CONF_AI_BASE_URL,
@@ -19,9 +21,12 @@ from .const import (
     CONF_NOTIFICATION_TARGETS,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
+    DEFAULT_AI_MODEL_GEMINI,
+    DEFAULT_AI_MODEL_OPENAI,
     DEFAULT_AI_PROVIDER,
     DEFAULT_POLLING_TIME,
     DEFAULT_RETENTION_DAYS,
+    FALLBACK_OPENAI_MODELS,
     LOGGER,
     MAX_RETENTION_DAYS,
     MIN_RETENTION_DAYS,
@@ -73,6 +78,31 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         current_options = self._entry.options
         current_data = self._entry.data
 
+        provider = current_options.get(
+            CONF_AI_PROVIDER, current_data.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
+        )
+        api_key = current_options.get(
+            CONF_AI_API_KEY, current_data.get(CONF_AI_API_KEY, "")
+        )
+
+        default_model = (
+            DEFAULT_AI_MODEL_GEMINI
+            if provider == PROVIDER_GEMINI
+            else DEFAULT_AI_MODEL_OPENAI
+        )
+        current_model = current_options.get(
+            CONF_AI_MODEL, current_data.get(CONF_AI_MODEL, default_model)
+        )
+
+        # Discover or build available model list
+        if provider == PROVIDER_GEMINI:
+            available_models = await async_list_gemini_models(api_key, hass=self.hass)
+        else:
+            available_models = list(FALLBACK_OPENAI_MODELS)
+
+        if current_model and current_model not in available_models:
+            available_models.insert(0, current_model)
+
         options_schema = vol.Schema(
             {
                 vol.Optional(
@@ -106,26 +136,25 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                     default=current_options.get(
                         CONF_POLLING_SCHEDULE, DEFAULT_POLLING_TIME
                     ),
-                ): str,
+                ): selector.TimeSelector(selector.TimeSelectorConfig()),
                 vol.Optional(
                     CONF_AI_PROVIDER,
-                    default=current_options.get(
-                        CONF_AI_PROVIDER,
-                        current_data.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER),
-                    ),
+                    default=provider,
                 ): vol.In([PROVIDER_GEMINI, PROVIDER_OPENAI]),
                 vol.Optional(
                     CONF_AI_API_KEY,
-                    default=current_options.get(
-                        CONF_AI_API_KEY, current_data.get(CONF_AI_API_KEY, "")
-                    ),
+                    default=api_key,
                 ): str,
                 vol.Optional(
                     CONF_AI_MODEL,
-                    default=current_options.get(
-                        CONF_AI_MODEL, current_data.get(CONF_AI_MODEL, "")
-                    ),
-                ): str,
+                    default=current_model or (available_models[0] if available_models else ""),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=available_models,
+                        custom_value=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     CONF_AI_BASE_URL,
                     default=current_options.get(
@@ -139,3 +168,4 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=options_schema,
         )
+

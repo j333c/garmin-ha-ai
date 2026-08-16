@@ -344,3 +344,34 @@ def test_async_login_with_credentials_mfa_propagation() -> None:
 
     asyncio.run(run())
 
+
+def test_login_with_tokens_rate_limit() -> None:
+    """Test token restore handles 429 rate limits with GarminRateLimitError instead of auth failure."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        mock_storage.async_load_tokens = AsyncMock(return_value={"tokenstore": "valid_token"})
+
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        from custom_components.garmin_ha_ai.garmin_client import GarminRateLimitError
+        from garminconnect import GarminConnectConnectionError
+
+        with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
+            mock_garmin_inst = MagicMock()
+            mock_garmin_inst.login.side_effect = GarminConnectConnectionError("Mobile login returned 429 — IP rate limited by Garmin")
+            mock_garmin_cls.return_value = mock_garmin_inst
+
+            with pytest.raises(GarminRateLimitError):
+                await client_adapter.async_login_with_tokens()
+
+    asyncio.run(run())
+
+

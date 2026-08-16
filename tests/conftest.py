@@ -122,6 +122,14 @@ if "homeassistant" not in sys.modules:
         def __init__(self):
             pass
 
+        @property
+        def unique_id(self):
+            return getattr(self, "_attr_unique_id", None)
+
+        @property
+        def name(self):
+            return getattr(self, "_attr_name", None)
+
     class MockSensorEntityDescription:
         def __init__(
             self,
@@ -139,13 +147,42 @@ if "homeassistant" not in sys.modules:
             self.state_class = state_class
             self.icon = icon
 
+    from enum import StrEnum
+
+    class MockPlatform(StrEnum):
+        SENSOR = "sensor"
+        BUTTON = "button"
+
+    ha_mock.Platform = MockPlatform
+
     components_mock = MagicMock()
     sensor_mock = MagicMock()
     sensor_mock.SensorEntity = MockSensorEntity
     sensor_mock.SensorEntityDescription = MockSensorEntityDescription
     components_mock.sensor = sensor_mock
+
+    class MockButtonEntity:
+        def __init__(self):
+            pass
+
+        @property
+        def unique_id(self):
+            return getattr(self, "_attr_unique_id", None)
+
+        @property
+        def name(self):
+            return getattr(self, "_attr_name", None)
+
+        async def async_press(self):
+            pass
+
+    button_mock = MagicMock()
+    button_mock.ButtonEntity = MockButtonEntity
+    components_mock.button = button_mock
+
     sys.modules["homeassistant.components"] = components_mock
     sys.modules["homeassistant.components.sensor"] = sensor_mock
+    sys.modules["homeassistant.components.button"] = button_mock
     ha_mock.components = components_mock
 
     class MockDeviceInfo(dict):
@@ -160,9 +197,9 @@ if "homeassistant" not in sys.modules:
     from datetime import datetime, timezone
     dt_util_mock = MagicMock()
     dt_util_mock.now.return_value = datetime.now(timezone.utc)
+    dt_util_mock.parse_datetime = lambda s: datetime.fromisoformat(s) if isinstance(s, str) else s
     sys.modules["homeassistant.util"] = MagicMock()
     sys.modules["homeassistant.util.dt"] = dt_util_mock
-
 
     entity_platform_mock = MagicMock()
     sys.modules["homeassistant.helpers.entity_platform"] = entity_platform_mock
@@ -170,12 +207,52 @@ if "homeassistant" not in sys.modules:
     config_validation_mock = MagicMock()
     sys.modules["homeassistant.helpers.config_validation"] = config_validation_mock
 
+    # Mock selector helper
+    class MockSelectSelectorMode:
+        DROPDOWN = "dropdown"
+        LIST = "list"
+
+    class MockSelectSelectorConfig:
+        def __init__(self, options=None, custom_value=False, mode="dropdown", **kwargs):
+            self.options = options or []
+            self.custom_value = custom_value
+            self.mode = mode
+
+    class MockSelectSelector:
+        def __init__(self, config=None):
+            self.config = config
+        def __call__(self, val):
+            return str(val)
+
+    class MockTimeSelectorConfig:
+        def __init__(self, **kwargs):
+            pass
+
+    class MockTimeSelector:
+        def __init__(self, config=None):
+            self.config = config
+        def __call__(self, val):
+            return str(val)
+
+    def mock_selector(selector_dict):
+        return lambda val: val
+
+    selector_mock = MagicMock()
+    selector_mock.selector = mock_selector
+    selector_mock.SelectSelector = MockSelectSelector
+    selector_mock.SelectSelectorConfig = MockSelectSelectorConfig
+    selector_mock.SelectSelectorMode = MockSelectSelectorMode
+    selector_mock.TimeSelector = MockTimeSelector
+    selector_mock.TimeSelectorConfig = MockTimeSelectorConfig
+    sys.modules["homeassistant.helpers.selector"] = selector_mock
+
     helpers_mock = MagicMock()
     helpers_mock.storage = storage_mock
     helpers_mock.update_coordinator = update_coordinator_mock
     helpers_mock.entity_platform = entity_platform_mock
     helpers_mock.entity = entity_mock
     helpers_mock.config_validation = config_validation_mock
+    helpers_mock.selector = selector_mock
     sys.modules["homeassistant.helpers"] = helpers_mock
     ha_mock.helpers = helpers_mock
 

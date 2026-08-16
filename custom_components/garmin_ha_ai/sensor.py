@@ -1,6 +1,7 @@
 """Sensor platform for Garmin HA AI integration."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -14,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import GarminDataUpdateCoordinator
@@ -308,9 +310,21 @@ class GarminAILastUpdateSensor(
         self._attr_device_info = _get_device_info(entry)
 
     @property
-    def native_value(self) -> str | None:
-        """Return the timestamp of the last successful update."""
-        return getattr(self.coordinator, "last_update_time", None)
+    def native_value(self) -> datetime | None:
+        """Return the timestamp of the last successful update as a datetime object."""
+        val = getattr(self.coordinator, "last_update_time", None)
+        if isinstance(val, str):
+            try:
+                parsed = dt_util.parse_datetime(val)
+                if isinstance(parsed, datetime):
+                    return parsed
+            except Exception:
+                pass
+            try:
+                return datetime.fromisoformat(val)
+            except Exception:
+                return None
+        return val
 
 
 

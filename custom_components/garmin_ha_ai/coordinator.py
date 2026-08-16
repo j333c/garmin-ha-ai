@@ -1,7 +1,7 @@
 """DataUpdateCoordinator for Garmin HA AI integration."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -44,7 +44,11 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
-from .garmin_client import GarminClient
+from .garmin_client import (
+    GarminClient,
+    GarminConnectTooManyRequestsError,
+    GarminRateLimitError,
+)
 from .models import AIHealthReport, GarminDailyMetrics
 from .storage import GarminStorage
 
@@ -65,7 +69,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.storage = storage
         self.latest_report: AIHealthReport | None = None
         self.latest_answer: dict[str, Any] | None = None
-        self.last_update_time: str | None = None
+        self.last_update_time: datetime | None = None
         self._is_generating: bool = False
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
@@ -160,6 +164,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 api_key=api_key,
                 model=model,
                 base_url=base_url,
+                hass=self.hass,
             )
             raw_response = await provider.async_generate_response(prompt)
             report = parse_ai_health_report(
@@ -169,7 +174,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             )
 
             self.latest_report = report
-            self.last_update_time = dt_util.now().isoformat()
+            self.last_update_time = dt_util.now()
             self.async_update_listeners()
             LOGGER.info("Successfully generated AI health report using provider %s", provider_type)
 
@@ -208,13 +213,18 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 metrics.date,
                 metrics.steps,
             )
-            self.last_update_time = dt_util.now().isoformat()
+            self.last_update_time = dt_util.now()
             # Trigger background AI report generation automatically after sync
             self.hass.async_create_task(self.async_generate_report())
             return metrics
         except (ConfigEntryAuthFailed, GarminConnectAuthenticationError) as err:
             LOGGER.warning("Authentication failed during Garmin background polling: %s", err)
             raise ConfigEntryAuthFailed(f"Garmin authentication failed: {err}") from err
+        except (GarminRateLimitError, GarminConnectTooManyRequestsError) as err:
+            LOGGER.warning("Garmin Connect API rate limited (HTTP 429); retaining existing metrics: %s", err)
+            if self.data is not None:
+                return self.data
+            raise UpdateFailed(f"Garmin Connect rate limit (HTTP 429): {err}") from err
         except (GarminConnectConnectionError, Exception) as err:
             LOGGER.warning("Error fetching Garmin data: %s", err)
             raise UpdateFailed(f"Error fetching Garmin data: {err}") from err

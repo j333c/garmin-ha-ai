@@ -157,3 +157,31 @@ def test_garmin_ai_last_answer_sensor() -> None:
     assert answer_sensor.extra_state_attributes["timestamp"] == "2026-08-15T22:00:00Z"
 
 
+def test_garmin_ai_last_update_sensor() -> None:
+    """Test GarminAILastUpdateSensor returns datetime object with tzinfo."""
+    from datetime import datetime, timezone
+    from custom_components.garmin_ha_ai.sensor import GarminAILastUpdateSensor
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_coordinator = MagicMock()
+
+    # Case 1: No update yet
+    mock_coordinator.last_update_time = None
+    sensor = GarminAILastUpdateSensor(mock_coordinator, mock_entry)
+    assert sensor.native_value is None
+
+    # Case 2: Datetime object
+    now_dt = datetime(2026, 8, 16, 12, 0, 0, tzinfo=timezone.utc)
+    mock_coordinator.last_update_time = now_dt
+    assert sensor.native_value == now_dt
+    assert sensor.native_value.tzinfo is not None
+
+    # Case 3: ISO string fallback parsing
+    mock_coordinator.last_update_time = "2026-08-16T12:00:00+00:00"
+    parsed_dt = sensor.native_value
+    assert isinstance(parsed_dt, datetime)
+    assert parsed_dt.year == 2026
+
+
+

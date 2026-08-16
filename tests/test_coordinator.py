@@ -235,3 +235,29 @@ async def test_coordinator_dispatch_notification_targets(hass: HomeAssistant) ->
         mock_async_call.side_effect = ServiceNotFound("notify", "invalid_target")
         await coordinator.async_dispatch_notification(sample_report)
         # Should complete gracefully without throwing
+
+
+@pytest.mark.asyncio
+async def test_coordinator_rate_limit_fallback(hass: HomeAssistant) -> None:
+    """Test coordinator catches Garmin rate limits (429) and retains existing cached metrics."""
+    from custom_components.garmin_ha_ai.garmin_client import GarminRateLimitError
+
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    cached_metrics = GarminDailyMetrics(date="2026-08-15", steps=8500)
+    coordinator.data = cached_metrics
+
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        side_effect=GarminRateLimitError("Garmin rate limit 429")
+    )
+
+    metrics = await coordinator._async_update_data()
+    assert metrics is cached_metrics
+    assert coordinator.data.steps == 8500
+

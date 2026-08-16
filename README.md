@@ -59,7 +59,9 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 
 ---
 
-## 📊 Sensor Entities
+## 📊 Entities
+
+### Sensor Entities
 
 | Entity ID | Name | Unit / Type | Description |
 | :--- | :--- | :--- | :--- |
@@ -72,7 +74,13 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 | `sensor.garmin_ai_health_report_short` | AI Health Report (Short) | `text` | 1–2 sentence actionable summary for notifications/glance cards. |
 | `sensor.garmin_ai_health_report_long` | AI Health Report (Long) | `text` | Status overview with full multi-section Markdown report in attributes. |
 | `sensor.garmin_ai_last_answer` | AI Last Answer | `text` | Truncated response to the last interactive Q&A question asked. |
-| `sensor.garmin_ai_last_update` | Garmin AI Last Update | `timestamp` | Timestamp of the last successful Garmin data sync. |
+| `sensor.garmin_ai_last_update` | Garmin AI Last Update | `timestamp` | Datetime timestamp of the last successful Garmin sync. |
+
+### Button Entities
+
+| Entity ID | Name | Description |
+| :--- | :--- | :--- |
+| `button.garmin_ai_generate_report` | Generate AI Health Report | Triggers on-demand Garmin data extraction and AI briefing generation. |
 
 ---
 

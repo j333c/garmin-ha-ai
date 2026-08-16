@@ -10,8 +10,14 @@ from ..const import (
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
 )
-from .base import AIEngineError, AIEngineQuotaError, AIEngineTimeoutError, BaseAIProvider
-from .gemini import GeminiProvider
+from .base import (
+    AIEngineClientError,
+    AIEngineError,
+    AIEngineQuotaError,
+    AIEngineTimeoutError,
+    BaseAIProvider,
+)
+from .gemini import GeminiProvider, async_list_gemini_models
 from .openai import OpenAIProvider
 from .prompt import (
     assemble_qa_prompt,
@@ -25,9 +31,11 @@ __all__ = [
     "GeminiProvider",
     "OpenAIProvider",
     "AIEngineError",
+    "AIEngineClientError",
     "AIEngineQuotaError",
     "AIEngineTimeoutError",
     "get_ai_provider",
+    "async_list_gemini_models",
     "assemble_report_prompt",
     "assemble_qa_prompt",
     "parse_ai_health_report",

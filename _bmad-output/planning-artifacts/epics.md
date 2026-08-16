@@ -108,6 +108,10 @@ User receives daily scheduled and manually triggered AI health briefings (via Go
 User can ask context-grounded health and workout questions on demand via service `garmin_ha_ai.ask_question` (with `SupportsResponse.OPTIONAL` direct response data and update to `sensor.garmin_ai_last_answer`) or interactive Lovelace Q&A cards. Question answering queries local 30-day historical JSON store (`.storage/garmin_ha_ai_history.json` guarded by `asyncio.Lock()` with graceful fallback on missing files) to ground queries without hitting Garmin cloud APIs. Also supports dynamic Options Flow updates (`options_flow.py`) for goals, directives, schedule, and retention window post-installation.
 **FRs covered:** FR-14, FR-15, FR-17
 
+### Epic 4: AI Model Selection, Dashboard Experience & Core Integration Hardening
+User can dynamically select Gemini/OpenAI models from an API-populated dropdown in Options Flow (with modern model defaults and fast-failing non-transient error handling), configure daily polling schedule using an interactive UI Time Picker, trigger AI health report generation on-demand via a native Home Assistant Button entity (`button.garmin_ai_generate_report`) or dashboard button card, ask interactive coaching questions via dedicated dashboard card patterns, and benefit from non-blocking event-loop operation, ISO timestamp datetime typing, and resilient Garmin 429 rate-limit handling.
+**FRs covered:** FR-3, FR-5, FR-6, FR-8, FR-11, FR-13, FR-14, FR-17
+
 
 ## Epic 1: Integration Setup, Garmin Auth & Health Metric Ingestion Foundation
 
@@ -318,4 +322,78 @@ So that I can reconfigure settings post-installation and automatically prune old
 **When** opening Options Flow via Settings -> Devices & Services -> Configure
 **Then** the user can update target weight, workout targets, focus directive, polling schedule, and retention window (`retention_days`)
 **And** saving options updates entry settings immediately and triggers historical snapshot pruning in `.storage/garmin_ha_ai_history.json`
+
+---
+
+## Epic 4: AI Model Selection, Dashboard Experience & Core Integration Hardening
+
+User can dynamically select Gemini/OpenAI models from an API-populated dropdown in Options Flow (with modern model defaults and fast-failing non-transient error handling), configure daily polling schedule using an interactive UI Time Picker, trigger AI health report generation on-demand via a native Home Assistant Button entity (`button.garmin_ai_generate_report`) or dashboard button card, ask interactive coaching questions via dedicated dashboard card patterns, and benefit from non-blocking event-loop operation, ISO timestamp datetime typing, and resilient Garmin 429 rate-limit handling.
+
+### Story 4.1: Sensor Timestamp Datetime Type Correction & Event Loop Non-Blocking Fix
+
+As a Home Assistant user and system,
+I want `GarminAILastUpdateSensor` to return a `datetime.datetime` object with timezone from `native_value` and `GeminiProvider` to initialize SDK/SSL clients off the event loop via executor jobs,
+So that Home Assistant sensor validation does not raise `ValueError` / `AttributeError: 'str' object has no attribute 'tzinfo'` and no blocking `load_verify_locations` warnings occur.
+
+**Acceptance Criteria:**
+
+**Given** `GarminAILastUpdateSensor` registered in `sensor.py`
+**When** the coordinator updates `last_update_time`
+**Then** `GarminAILastUpdateSensor.native_value` returns a `datetime.datetime` instance with `tzinfo` (or `None`), passing Home Assistant `SensorDeviceClass.TIMESTAMP` validation without error
+**And** `genai.Client` initialization executes asynchronously within `hass.async_add_executor_job` without blocking the main event loop.
+
+### Story 4.2: Gemini Model Dynamic Discovery, Dropdown Selector & Non-Transient Error Fast-Fail
+
+As a Home Assistant user,
+I want to choose Gemini and OpenAI models from a dropdown list in Options Flow (populated dynamically via API with active model fallback) and have client errors fail immediately without retry loops,
+So that I can select active models, avoid deprecated 404 model errors (`gemini-2.0-flash`), and eliminate backoff retry log spam for non-transient client errors.
+
+**Acceptance Criteria:**
+
+**Given** the Options Flow configuration UI
+**When** configuring AI settings with a valid API key
+**Then** `options_flow.py` dynamically fetches available content-generation models from the API (with fallback to curated active models such as `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash`, etc.) and presents them in a dropdown `SelectSelector`
+**And** default Gemini model is updated to `gemini-2.5-flash`
+**And** non-transient HTTP/API client errors (400, 401, 403, 404) raise `AIEngineClientError` and immediately fail without retry backoff loops.
+
+### Story 4.3: Options Flow Time Picker & Schedule Selector Refinement
+
+As a Home Assistant user,
+I want an interactive UI Time Picker widget for "Tägliche Abrufzeit" / Polling Schedule in Options Flow,
+So that I can set my daily polling time with native clock UI controls instead of typing raw text strings.
+
+**Acceptance Criteria:**
+
+**Given** the Options Flow configuration UI
+**When** adjusting the daily polling schedule
+**Then** the field renders as a native Home Assistant `TimeSelector`
+**And** input values (`HH:MM:SS` or `HH:MM`) are saved and parsed cleanly by the coordinator scheduler
+**And** UI labels in German (`de.json`) and English (`en.json`, `strings.json`) accurately reflect the time picker setting.
+
+### Story 4.4: On-Demand Report Button Entity & Interactive Q&A Dashboard Patterns
+
+As a Home Assistant user,
+I want a native Home Assistant Button entity (`button.garmin_ai_generate_report`) and documented Lovelace dashboard card patterns for manual report generation and interactive Q&A,
+So that I can generate AI reports on demand with a single click and interact with my AI Health Coach directly on my dashboard with clear separation between daily briefings and conversational answers.
+
+**Acceptance Criteria:**
+
+**Given** an installed `garmin_ha_ai` integration
+**When** `button.garmin_ai_generate_report` is pressed or dashboard button card is clicked
+**Then** `coordinator.async_generate_report(force=True)` executes and updates report sensor entities
+**And** complete Lovelace dashboard card configurations are provided in `docs/dashboard_cards.md` and `README.md` for both on-demand report generation and interactive text-input Q&A.
+
+### Story 4.5: Garmin 429 Rate Limit Resilience & Auth Flow Isolation
+
+As a Home Assistant user,
+I want the Garmin client adapter and coordinator to handle HTTP 429 / `GarminConnectTooManyRequestsError` rate limits gracefully without treating them as invalid authentication or deleting valid tokens,
+So that temporary Garmin IP rate limits do not trigger false re-authentication alerts or authentication thrashing.
+
+**Acceptance Criteria:**
+
+**Given** Garmin Connect API returning HTTP 429 (`GarminConnectTooManyRequestsError`)
+**When** token resume, login, or metric fetching executes
+**Then** `garmin_client.py` logs a rate-limit notice and does NOT raise `ConfigEntryAuthFailed` or wipe valid OAuth tokens
+**And** `coordinator.py` catches 429 errors and falls back to cached local metrics without triggering re-authentication prompts.
+
 
