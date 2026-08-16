@@ -336,6 +336,12 @@
       this.attachShadow({ mode: "open" });
       this._loading = false;
       this._lastAnswerTimestamp = null;
+      this._config = {
+        title: "Garmin AI Coach Q&A",
+        question_entity: "text.garmin_ai_question",
+        button_entity: "button.garmin_ai_ask_question",
+        answer_entity: "sensor.garmin_ai_last_answer",
+      };
     }
 
     setConfig(config) {
@@ -353,7 +359,9 @@
 
     set hass(hass) {
       this._hass = hass;
-      const answerState = hass.states[this._config.answer_entity];
+      if (!this._config) return;
+
+      const answerState = hass && hass.states ? hass.states[this._config.answer_entity] : undefined;
       const currentTimestamp = answerState?.attributes?.timestamp || null;
 
       // If we were waiting for an answer and a new timestamp arrived, stop loading
@@ -367,6 +375,7 @@
 
     static getStubConfig() {
       return {
+        type: "custom:garmin-ha-ai-qa-card",
         title: "Garmin AI Coach Q&A",
         question_entity: "text.garmin_ai_question",
         button_entity: "button.garmin_ai_ask_question",
@@ -441,13 +450,13 @@
         console.error("Garmin AI Q&A Error:", err);
         // Fallback: update question text entity and press button
         try {
-          if (this._config.question_entity && this._hass.states[this._config.question_entity]) {
+          if (this._config.question_entity && this._hass.states && this._hass.states[this._config.question_entity]) {
             await this._hass.callService("text", "set_value", {
               entity_id: this._config.question_entity,
               value: question,
             });
           }
-          if (this._config.button_entity && this._hass.states[this._config.button_entity]) {
+          if (this._config.button_entity && this._hass.states && this._hass.states[this._config.button_entity]) {
             await this._hass.callService("button", "press", {
               entity_id: this._config.button_entity,
             });
@@ -462,7 +471,7 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass) return;
+      if (!this.shadowRoot || !this._hass || !this._config) return;
 
       const answerBox = this.shadowRoot.getElementById("answerBox");
       const askBtn = this.shadowRoot.getElementById("askBtn");
@@ -481,7 +490,7 @@
 
       if (askBtn) askBtn.disabled = false;
 
-      const answerState = this._hass.states[this._config.answer_entity];
+      const answerState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
       if (!answerState) {
         answerBox.innerHTML = `<div class="garmin-empty-state">Entity ${this._config.answer_entity} not found.</div>`;
         return;
@@ -533,6 +542,15 @@
       this.attachShadow({ mode: "open" });
       this._viewMode = "long"; // "long" | "short" | "dynamic"
       this._loading = false;
+      this._config = {
+        title: "Garmin AI Health Report",
+        report_entity: "sensor.garmin_ai_health_report_long",
+        short_report_entity: "sensor.garmin_ai_health_report_short",
+        selected_report_entity: "sensor.garmin_ai_selected_report",
+        generate_button_entity: "button.garmin_ai_generate_report",
+        last_update_entity: "sensor.garmin_ai_last_update",
+        default_view: "long",
+      };
     }
 
     setConfig(config) {
@@ -559,6 +577,7 @@
 
     static getStubConfig() {
       return {
+        type: "custom:garmin-ha-ai-report-card",
         title: "Garmin AI Health Report",
         report_entity: "sensor.garmin_ai_health_report_long",
         short_report_entity: "sensor.garmin_ai_health_report_short",
@@ -623,7 +642,7 @@
         await this._hass.callService("garmin_ha_ai", "generate_report", {});
       } catch (err) {
         console.error("Garmin AI Generate Report Error:", err);
-        if (this._config.generate_button_entity && this._hass.states[this._config.generate_button_entity]) {
+        if (this._config.generate_button_entity && this._hass.states && this._hass.states[this._config.generate_button_entity]) {
           try {
             await this._hass.callService("button", "press", {
               entity_id: this._config.generate_button_entity,
@@ -639,7 +658,7 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass) return;
+      if (!this.shadowRoot || !this._hass || !this._config) return;
 
       const reportBox = this.shadowRoot.getElementById("reportBox");
       if (!reportBox) return;
@@ -657,7 +676,7 @@
       let contentText = "";
       let lastUpdated = "";
 
-      if (this._config.last_update_entity && this._hass.states[this._config.last_update_entity]) {
+      if (this._config.last_update_entity && this._hass.states && this._hass.states[this._config.last_update_entity]) {
         const updateState = this._hass.states[this._config.last_update_entity];
         if (updateState.state && updateState.state !== "unavailable") {
           try {
@@ -670,13 +689,13 @@
       }
 
       if (this._viewMode === "short") {
-        const shortState = this._hass.states[this._config.short_report_entity];
+        const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
         contentText = shortState ? shortState.state : "No short summary available.";
       } else if (this._viewMode === "dynamic") {
-        const dynState = this._hass.states[this._config.selected_report_entity];
+        const dynState = this._hass.states ? this._hass.states[this._config.selected_report_entity] : undefined;
         contentText = dynState?.attributes?.report_text || dynState?.state || "No selected report view available.";
       } else {
-        const longState = this._hass.states[this._config.report_entity];
+        const longState = this._hass.states ? this._hass.states[this._config.report_entity] : undefined;
         contentText = longState?.attributes?.full_report || longState?.attributes?.short_summary || longState?.state || "No detailed report generated yet.";
       }
 
@@ -704,6 +723,17 @@
       super();
       this.attachShadow({ mode: "open" });
       this._activeTab = "qa"; // "qa" | "report"
+      this._config = {
+        title: "Garmin AI Health Coach",
+        steps_entity: "sensor.garmin_steps",
+        sleep_entity: "sensor.garmin_sleep_score",
+        battery_entity: "sensor.garmin_body_battery",
+        stress_entity: "sensor.garmin_stress_level",
+        hr_entity: "sensor.garmin_resting_heart_rate",
+        short_report_entity: "sensor.garmin_ai_health_report_short",
+        long_report_entity: "sensor.garmin_ai_health_report_long",
+        answer_entity: "sensor.garmin_ai_last_answer",
+      };
     }
 
     setConfig(config) {
@@ -731,6 +761,7 @@
 
     static getStubConfig() {
       return {
+        type: "custom:garmin-ha-ai-overview-card",
         title: "Garmin AI Health Coach",
       };
     }
@@ -826,7 +857,7 @@
     }
 
     _updateContent() {
-      if (!this.shadowRoot || !this._hass) return;
+      if (!this.shadowRoot || !this._hass || !this._config) return;
 
       const glanceBar = this.shadowRoot.getElementById("glanceBar");
       const focusBanner = this.shadowRoot.getElementById("focusBanner");
@@ -836,6 +867,7 @@
       // Update Glance Metrics
       if (glanceBar) {
         const getVal = (entityId, fallback = "--") => {
+          if (!this._hass || !this._hass.states) return fallback;
           const s = this._hass.states[entityId];
           return s && s.state !== "unavailable" && s.state !== "unknown" ? s.state : fallback;
         };
@@ -866,14 +898,14 @@
 
       // Update Focus Banner
       if (focusBanner) {
-        const shortState = this._hass.states[this._config.short_report_entity];
+        const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
         const focusText = shortState && shortState.state !== "unavailable" ? shortState.state : "Ready for today's workout and recovery guidance.";
         focusBanner.innerHTML = `<strong>💡 Today's Focus:</strong> ${focusText}`;
       }
 
       // Update Q&A Answer View
       if (answerBox) {
-        const ansState = this._hass.states[this._config.answer_entity];
+        const ansState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
         const fullAnswer = ansState?.attributes?.full_answer || ansState?.state || "";
         const question = ansState?.attributes?.question || "";
         if (!fullAnswer || fullAnswer === "No question asked yet" || fullAnswer === "unavailable") {
@@ -888,7 +920,7 @@
 
       // Update Report View
       if (reportBox) {
-        const repState = this._hass.states[this._config.long_report_entity];
+        const repState = this._hass.states ? this._hass.states[this._config.long_report_entity] : undefined;
         const fullRep = repState?.attributes?.full_report || repState?.state || "No full report generated yet.";
         reportBox.innerHTML = `<div>${renderMarkdown(fullRep)}</div>`;
       }
