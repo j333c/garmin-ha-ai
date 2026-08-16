@@ -144,6 +144,33 @@
     }
   }
 
+  /**
+   * Smart entity finder for Home Assistant states.
+   * Finds matching entities by keyword/pattern across integration naming variants,
+   * returning an existing entity ID or empty string fallback so the entity picker
+   * does not show "Unknown entity selected".
+   */
+  function smartFindEntity(hass, patterns, domain = "sensor") {
+    if (!hass || !hass.states) return "";
+    const prefix = `${domain}.`;
+    const entityIds = Object.keys(hass.states).filter((id) => id.startsWith(prefix));
+
+    for (const pattern of patterns) {
+      // 1. Exact match
+      if (hass.states[pattern]) return pattern;
+      if (hass.states[`${prefix}${pattern}`]) return `${prefix}${pattern}`;
+
+      // 2. Substring search in domain entity IDs
+      const match = entityIds.find((id) => {
+        const afterDomain = id.slice(prefix.length);
+        return afterDomain === pattern || afterDomain.includes(pattern);
+      });
+      if (match) return match;
+    }
+
+    return "";
+  }
+
   const BASE_STYLES = `
     ha-card {
       padding: 16px;
@@ -515,9 +542,9 @@
     _getDefaultConfig() {
       return {
         title: "Garmin AI Coach Q&A",
-        question_entity: "text.garmin_ai_question",
-        button_entity: "button.garmin_ai_ask_question",
-        answer_entity: "sensor.garmin_ai_last_answer",
+        question_entity: "",
+        button_entity: "",
+        answer_entity: "",
       };
     }
 
@@ -526,16 +553,11 @@
     }
 
     static getStubConfig(hass) {
-      const findEntity = (prefix, fallback) => {
-        if (!hass || !hass.states) return fallback;
-        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
-        return match || fallback;
-      };
       return {
         title: "Garmin AI Coach Q&A",
-        question_entity: findEntity("text.garmin_ai", "text.garmin_ai_question"),
-        button_entity: findEntity("button.garmin_ai_ask", "button.garmin_ai_ask_question"),
-        answer_entity: findEntity("sensor.garmin_ai_last_answer", "sensor.garmin_ai_last_answer"),
+        question_entity: smartFindEntity(hass, ["garmin_ai_question", "ai_question", "question"], "text"),
+        button_entity: smartFindEntity(hass, ["garmin_ai_ask_question", "ask_question", "ask"], "button"),
+        answer_entity: smartFindEntity(hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor"),
       };
     }
 
@@ -544,7 +566,8 @@
       if (!this._config) return;
 
       try {
-        const currentTimestamp = this._getEntityAttribute(this._config.answer_entity, "timestamp", null);
+        const answerEnt = this._config.answer_entity || smartFindEntity(hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor");
+        const currentTimestamp = this._getEntityAttribute(answerEnt, "timestamp", null);
         if (this._loading && currentTimestamp && currentTimestamp !== this._lastAnswerTimestamp) {
           this._loading = false;
           this._error = null;
@@ -690,7 +713,9 @@
         return;
       }
 
-      const answerState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
+      const answerEnt = this._config.answer_entity || smartFindEntity(this._hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor");
+      const answerState = answerEnt && this._hass.states ? this._hass.states[answerEnt] : undefined;
+
       if (!answerState) {
         answerBox.innerHTML = `<div class="garmin-empty-state">Type a question above and click "Ask" to consult your AI Health Coach.</div>`;
         return;
@@ -755,11 +780,11 @@
     _getDefaultConfig() {
       return {
         title: "Garmin AI Health Report",
-        report_entity: "sensor.garmin_ai_health_report_long",
-        short_report_entity: "sensor.garmin_ai_health_report_short",
-        selected_report_entity: "sensor.garmin_ai_selected_report",
-        generate_button_entity: "button.garmin_ai_generate_report",
-        last_update_entity: "sensor.garmin_ai_last_update",
+        report_entity: "",
+        short_report_entity: "",
+        selected_report_entity: "",
+        generate_button_entity: "",
+        last_update_entity: "",
         default_view: "long",
       };
     }
@@ -769,18 +794,13 @@
     }
 
     static getStubConfig(hass) {
-      const findEntity = (prefix, fallback) => {
-        if (!hass || !hass.states) return fallback;
-        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
-        return match || fallback;
-      };
       return {
         title: "Garmin AI Health Report",
-        report_entity: findEntity("sensor.garmin_ai_health_report_long", "sensor.garmin_ai_health_report_long"),
-        short_report_entity: findEntity("sensor.garmin_ai_health_report_short", "sensor.garmin_ai_health_report_short"),
-        selected_report_entity: findEntity("sensor.garmin_ai_selected_report", "sensor.garmin_ai_selected_report"),
-        generate_button_entity: findEntity("button.garmin_ai_generate_report", "button.garmin_ai_generate_report"),
-        last_update_entity: findEntity("sensor.garmin_ai_last_update", "sensor.garmin_ai_last_update"),
+        report_entity: smartFindEntity(hass, ["garmin_ai_health_report_long", "health_report_long", "report_long"], "sensor"),
+        short_report_entity: smartFindEntity(hass, ["garmin_ai_health_report_short", "health_report_short", "report_short"], "sensor"),
+        selected_report_entity: smartFindEntity(hass, ["garmin_ai_selected_report", "ai_selected_report", "selected_report"], "sensor"),
+        generate_button_entity: smartFindEntity(hass, ["garmin_ai_generate_report", "generate_report", "generate"], "button"),
+        last_update_entity: smartFindEntity(hass, ["garmin_ai_last_update", "ai_last_update", "last_update"], "sensor"),
         default_view: "long",
       };
     }
@@ -895,8 +915,9 @@
       let contentText = "";
       let lastUpdated = "";
 
-      if (this._config.last_update_entity && this._hass.states && this._hass.states[this._config.last_update_entity]) {
-        const updateState = this._hass.states[this._config.last_update_entity];
+      const updateEnt = this._config.last_update_entity || smartFindEntity(this._hass, ["garmin_ai_last_update", "ai_last_update", "last_update"], "sensor");
+      if (updateEnt && this._hass.states && this._hass.states[updateEnt]) {
+        const updateState = this._hass.states[updateEnt];
         if (updateState.state && updateState.state !== "unavailable" && updateState.state !== "unknown") {
           try {
             const d = new Date(updateState.state);
@@ -909,16 +930,19 @@
       }
 
       if (this._viewMode === "short") {
-        const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
+        const shortEnt = this._config.short_report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_short", "health_report_short", "report_short"], "sensor");
+        const shortState = shortEnt && this._hass.states ? this._hass.states[shortEnt] : undefined;
         contentText =
           shortState && shortState.state !== "unavailable" && shortState.state !== "unknown" ? shortState.state : "";
       } else if (this._viewMode === "dynamic") {
-        const dynState = this._hass.states ? this._hass.states[this._config.selected_report_entity] : undefined;
+        const dynEnt = this._config.selected_report_entity || smartFindEntity(this._hass, ["garmin_ai_selected_report", "ai_selected_report", "selected_report"], "sensor");
+        const dynState = dynEnt && this._hass.states ? this._hass.states[dynEnt] : undefined;
         contentText =
           dynState?.attributes?.report_text ||
           (dynState?.state !== "unavailable" && dynState?.state !== "unknown" ? dynState.state : "");
       } else {
-        const longState = this._hass.states ? this._hass.states[this._config.report_entity] : undefined;
+        const longEnt = this._config.report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_long", "health_report_long", "report_long"], "sensor");
+        const longState = longEnt && this._hass.states ? this._hass.states[longEnt] : undefined;
         contentText = longState?.attributes?.full_report || longState?.attributes?.short_summary || "";
       }
 
@@ -957,14 +981,14 @@
     _getDefaultConfig() {
       return {
         title: "Garmin AI Health Coach",
-        steps_entity: "sensor.garmin_steps",
-        sleep_entity: "sensor.garmin_sleep_score",
-        battery_entity: "sensor.garmin_body_battery",
-        stress_entity: "sensor.garmin_stress_level",
-        hr_entity: "sensor.garmin_resting_heart_rate",
-        short_report_entity: "sensor.garmin_ai_health_report_short",
-        long_report_entity: "sensor.garmin_ai_health_report_long",
-        answer_entity: "sensor.garmin_ai_last_answer",
+        sleep_entity: "",
+        battery_entity: "",
+        stress_entity: "",
+        hr_entity: "",
+        steps_entity: "",
+        short_report_entity: "",
+        long_report_entity: "",
+        answer_entity: "",
       };
     }
 
@@ -973,21 +997,16 @@
     }
 
     static getStubConfig(hass) {
-      const findEntity = (prefix, fallback) => {
-        if (!hass || !hass.states) return fallback;
-        const match = Object.keys(hass.states).find((e) => e.startsWith(prefix) || e === fallback);
-        return match || fallback;
-      };
       return {
         title: "Garmin AI Health Coach",
-        steps_entity: findEntity("sensor.garmin_steps", "sensor.garmin_steps"),
-        sleep_entity: findEntity("sensor.garmin_sleep_score", "sensor.garmin_sleep_score"),
-        battery_entity: findEntity("sensor.garmin_body_battery", "sensor.garmin_body_battery"),
-        stress_entity: findEntity("sensor.garmin_stress_level", "sensor.garmin_stress_level"),
-        hr_entity: findEntity("sensor.garmin_resting_heart_rate", "sensor.garmin_resting_heart_rate"),
-        short_report_entity: findEntity("sensor.garmin_ai_health_report_short", "sensor.garmin_ai_health_report_short"),
-        long_report_entity: findEntity("sensor.garmin_ai_health_report_long", "sensor.garmin_ai_health_report_long"),
-        answer_entity: findEntity("sensor.garmin_ai_last_answer", "sensor.garmin_ai_last_answer"),
+        sleep_entity: smartFindEntity(hass, ["garmin_sleep_score", "sleep_score", "sleep"], "sensor"),
+        battery_entity: smartFindEntity(hass, ["garmin_body_battery", "body_battery"], "sensor"),
+        stress_entity: smartFindEntity(hass, ["garmin_stress_level", "stress_level", "stress"], "sensor"),
+        hr_entity: smartFindEntity(hass, ["garmin_resting_heart_rate", "resting_heart_rate", "resting_hr", "resting_heart"], "sensor"),
+        steps_entity: smartFindEntity(hass, ["garmin_steps", "daily_steps", "steps", "total_steps"], "sensor"),
+        short_report_entity: smartFindEntity(hass, ["garmin_ai_health_report_short", "health_report_short", "report_short"], "sensor"),
+        long_report_entity: smartFindEntity(hass, ["garmin_ai_health_report_long", "health_report_long", "report_long"], "sensor"),
+        answer_entity: smartFindEntity(hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor"),
       };
     }
 
@@ -1138,35 +1157,51 @@
         return;
       }
 
+      // Resolve entity IDs (either configured or auto-detected)
+      const sleepEnt = this._config.sleep_entity || smartFindEntity(this._hass, ["garmin_sleep_score", "sleep_score", "sleep"], "sensor");
+      const batteryEnt = this._config.battery_entity || smartFindEntity(this._hass, ["garmin_body_battery", "body_battery"], "sensor");
+      const stressEnt = this._config.stress_entity || smartFindEntity(this._hass, ["garmin_stress_level", "stress_level", "stress"], "sensor");
+      const hrEnt = this._config.hr_entity || smartFindEntity(this._hass, ["garmin_resting_heart_rate", "resting_heart_rate", "resting_hr", "resting_heart"], "sensor");
+      const stepsEnt = this._config.steps_entity || smartFindEntity(this._hass, ["garmin_steps", "daily_steps", "steps", "total_steps"], "sensor");
+      const shortEnt = this._config.short_report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_short", "health_report_short", "report_short"], "sensor");
+      const longEnt = this._config.long_report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_long", "health_report_long", "report_long"], "sensor");
+      const answerEnt = this._config.answer_entity || smartFindEntity(this._hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor");
+
       // Update Glance Metrics
       if (glanceBar) {
+        const sleepVal = this._getEntityState(sleepEnt);
+        const battVal = this._getEntityState(batteryEnt);
+        const stressVal = this._getEntityState(stressEnt);
+        const hrVal = this._getEntityState(hrEnt);
+        const stepsVal = this._getEntityState(stepsEnt);
+
         glanceBar.innerHTML = `
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Sleep</div>
-            <div class="garmin-metric-val">${this._getEntityState(this._config.sleep_entity)}%</div>
+            <div class="garmin-metric-val">${sleepVal !== "--" ? `${sleepVal}%` : "--"}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Battery</div>
-            <div class="garmin-metric-val">${this._getEntityState(this._config.battery_entity)}%</div>
+            <div class="garmin-metric-val">${battVal !== "--" ? `${battVal}%` : "--"}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Stress</div>
-            <div class="garmin-metric-val">${this._getEntityState(this._config.stress_entity)}</div>
+            <div class="garmin-metric-val">${stressVal}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Rest HR</div>
-            <div class="garmin-metric-val">${this._getEntityState(this._config.hr_entity)}</div>
+            <div class="garmin-metric-val">${hrVal}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Steps</div>
-            <div class="garmin-metric-val">${this._getEntityState(this._config.steps_entity)}</div>
+            <div class="garmin-metric-val">${stepsVal}</div>
           </div>
         `;
       }
 
       // Update Focus Banner
       if (focusBanner) {
-        const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
+        const shortState = shortEnt && this._hass.states ? this._hass.states[shortEnt] : undefined;
         const focusText =
           shortState && shortState.state !== "unavailable" && shortState.state !== "unknown"
             ? shortState.state
@@ -1191,7 +1226,7 @@
             <div>${renderMarkdown(fullAnswer)}</div>
           `;
         } else {
-          const ansState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
+          const ansState = answerEnt && this._hass.states ? this._hass.states[answerEnt] : undefined;
           const fullAnswer =
             ansState?.attributes?.full_answer ||
             (ansState?.state !== "unavailable" && ansState?.state !== "unknown" ? ansState?.state : "");
@@ -1209,7 +1244,7 @@
 
       // Update Report View
       if (reportBox) {
-        const repState = this._hass.states ? this._hass.states[this._config.long_report_entity] : undefined;
+        const repState = longEnt && this._hass.states ? this._hass.states[longEnt] : undefined;
         const fullRep =
           repState?.attributes?.full_report ||
           repState?.attributes?.short_summary ||
@@ -1435,7 +1470,7 @@
   }
 
   console.info(
-    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.1.4) ",
+    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.1.5) ",
     "color: white; background: #03a9f4; font-weight: 700; border-radius: 3px 0 0 3px;",
     "color: #03a9f4; background: rgba(3, 169, 244, 0.1); font-weight: 700; border-radius: 0 3px 3px 0;"
   );
