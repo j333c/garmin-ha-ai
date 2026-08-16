@@ -44,11 +44,11 @@
       html = html.replace(/^# (.*$)/gm, '<h2 class="garmin-h2">$1</h2>');
 
       // 6. Bold & Italics
-      html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
-      html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-      html = html.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+      html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>");
+      html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+      html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
+      html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+      html = html.replace(/_([^_\n]+)_/g, "<em>$1</em>");
 
       // 7. GitHub-style alerts & blockquotes
       html = html.replace(/^&gt;\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/gm, function (_, type, text) {
@@ -58,7 +58,10 @@
       html = html.replace(/^&gt;\s*(.*)$/gm, '<blockquote class="garmin-quote">$1</blockquote>');
 
       // 8. Markdown Links [text](url)
-      html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="garmin-link">$1</a>');
+      html = html.replace(
+        /\[([^\]]+)\]\(([^)\s]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="garmin-link">$1</a>'
+      );
 
       // 9. Safe Linear Line-by-Line Block & List Parser (No backtracking regexes)
       const lines = html.split("\n");
@@ -134,7 +137,10 @@
       return out.filter(Boolean).join("\n");
     } catch (err) {
       console.warn("Garmin HA AI Markdown parse fallback:", err);
-      return `<p class="garmin-p">${String(md).replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>")}</p>`;
+      return `<p class="garmin-p">${String(md)
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br/>")}</p>`;
     }
   }
 
@@ -406,18 +412,108 @@
   `;
 
   /**
-   * 1. Garmin AI Q&A Coach Card
+   * Base Card Class providing common lifecycle, styling, error banners, and reactivity.
    */
-  class GarminHAIQAQuestionCard extends HTMLElement {
+  class GarminCardBase extends HTMLElement {
     constructor() {
       super();
       this.attachShadow({ mode: "open" });
-      this._loading = false;
+      this._hass = null;
+      this._config = null;
       this._error = null;
+      this._initialized = false;
+    }
+
+    getCardSize() {
+      return 4;
+    }
+
+    _getDefaultConfig() {
+      return {};
+    }
+
+    setConfig(config) {
+      if (!config) {
+        throw new Error("Invalid card configuration");
+      }
+      this._config = Object.assign({}, this._getDefaultConfig(), config);
+      if (!this._initialized) {
+        this._render();
+        this._initialized = true;
+      } else {
+        this._updateTitle();
+      }
+      this._updateContent();
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      if (this._initialized) {
+        this._updateContent();
+      }
+    }
+
+    _updateTitle() {
+      if (!this.shadowRoot || !this._config) return;
+      const titleSpan = this.shadowRoot.querySelector(".garmin-card-title span");
+      if (titleSpan && this._config.title) {
+        titleSpan.textContent = this._config.title;
+      }
+    }
+
+    _renderErrorBanner(containerId, errorText, onClose) {
+      if (!this.shadowRoot) return;
+      const box = this.shadowRoot.getElementById(containerId);
+      if (!box) return;
+
+      if (!errorText) {
+        box.innerHTML = "";
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="garmin-error-banner">
+          <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
+          <div class="garmin-error-text"><strong>AI Notice:</strong> ${errorText}</div>
+          <button class="garmin-error-close" id="${containerId}_closeBtn">✕</button>
+        </div>
+      `;
+
+      const closeBtn = box.querySelector(`#${containerId}_closeBtn`);
+      if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+          box.innerHTML = "";
+          if (onClose) onClose();
+        });
+      }
+    }
+
+    _getEntityState(entityId, fallback = "--") {
+      if (!this._hass || !this._hass.states || !entityId) return fallback;
+      const s = this._hass.states[entityId];
+      return s && s.state !== "unavailable" && s.state !== "unknown" ? s.state : fallback;
+    }
+
+    _getEntityAttribute(entityId, attrName, fallback = null) {
+      if (!this._hass || !this._hass.states || !entityId) return fallback;
+      const s = this._hass.states[entityId];
+      return s && s.attributes && s.attributes[attrName] !== undefined ? s.attributes[attrName] : fallback;
+    }
+  }
+
+  /**
+   * 1. Garmin AI Q&A Coach Card
+   */
+  class GarminHAIQAQuestionCard extends GarminCardBase {
+    constructor() {
+      super();
+      this._loading = false;
       this._directAnswer = null;
       this._lastAnswerTimestamp = null;
-      this._initialized = false;
-      this._config = {
+    }
+
+    _getDefaultConfig() {
+      return {
         title: "Garmin AI Coach Q&A",
         question_entity: "text.garmin_ai_question",
         button_entity: "button.garmin_ai_ask_question",
@@ -425,43 +521,8 @@
       };
     }
 
-    setConfig(config) {
-      this._config = Object.assign(
-        {
-          title: "Garmin AI Coach Q&A",
-          question_entity: "text.garmin_ai_question",
-          button_entity: "button.garmin_ai_ask_question",
-          answer_entity: "sensor.garmin_ai_last_answer",
-        },
-        config || {}
-      );
-      if (!this._initialized) {
-        this._render();
-        this._initialized = true;
-      }
-      this._updateContent();
-    }
-
-    set hass(hass) {
-      this._hass = hass;
-      if (!this._config) return;
-
-      try {
-        const answerState = hass && hass.states ? hass.states[this._config.answer_entity] : undefined;
-        const currentTimestamp = answerState?.attributes?.timestamp || null;
-
-        // If we were waiting for an answer and a new timestamp arrived, stop loading
-        if (this._loading && currentTimestamp && currentTimestamp !== this._lastAnswerTimestamp) {
-          this._loading = false;
-          this._error = null;
-          this._directAnswer = null;
-        }
-        this._lastAnswerTimestamp = currentTimestamp;
-
-        this._updateContent();
-      } catch (err) {
-        console.error("Error in GarminHAIQAQuestionCard set hass:", err);
-      }
+    static getConfigElement() {
+      return document.createElement("garmin-ha-ai-qa-card-editor");
     }
 
     static getStubConfig(hass) {
@@ -471,7 +532,6 @@
         return match || fallback;
       };
       return {
-        type: "custom:garmin-ha-ai-qa-card",
         title: "Garmin AI Coach Q&A",
         question_entity: findEntity("text.garmin_ai", "text.garmin_ai_question"),
         button_entity: findEntity("button.garmin_ai_ask", "button.garmin_ai_ask_question"),
@@ -479,8 +539,24 @@
       };
     }
 
-    getCardSize() {
-      return 4;
+    set hass(hass) {
+      this._hass = hass;
+      if (!this._config) return;
+
+      try {
+        const currentTimestamp = this._getEntityAttribute(this._config.answer_entity, "timestamp", null);
+        if (this._loading && currentTimestamp && currentTimestamp !== this._lastAnswerTimestamp) {
+          this._loading = false;
+          this._error = null;
+          this._directAnswer = null;
+        }
+        this._lastAnswerTimestamp = currentTimestamp;
+        if (this._initialized) {
+          this._updateContent();
+        }
+      } catch (err) {
+        console.error("Error in GarminHAIQAQuestionCard set hass:", err);
+      }
     }
 
     _render() {
@@ -492,7 +568,7 @@
           <div class="garmin-card-header">
             <div class="garmin-card-title">
               <ha-icon icon="mdi:chat-question"></ha-icon>
-              <span>${this._config.title}</span>
+              <span>${this._config.title || "Garmin AI Coach Q&A"}</span>
             </div>
           </div>
           <div id="errorBox"></div>
@@ -573,41 +649,13 @@
     _updateContent() {
       if (!this.shadowRoot || !this._config) return;
 
-      const errorBox = this.shadowRoot.getElementById("errorBox");
       const answerBox = this.shadowRoot.getElementById("answerBox");
       const askBtn = this.shadowRoot.getElementById("askBtn");
       if (!answerBox) return;
 
-      if (!this._hass) {
-        answerBox.innerHTML = `
-          <div class="garmin-empty-state">
-            Type a question above and click "Ask" to consult your AI Health Coach.
-          </div>
-        `;
-        return;
-      }
-
-      // Render Error Banner if active
-      if (errorBox) {
-        if (this._error) {
-          errorBox.innerHTML = `
-            <div class="garmin-error-banner">
-              <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
-              <div class="garmin-error-text"><strong>AI Notice:</strong> ${this._error}</div>
-              <button class="garmin-error-close" id="closeErrorBtn">✕</button>
-            </div>
-          `;
-          const closeBtn = errorBox.querySelector("#closeErrorBtn");
-          if (closeBtn) {
-            closeBtn.addEventListener("click", () => {
-              this._error = null;
-              errorBox.innerHTML = "";
-            });
-          }
-        } else {
-          errorBox.innerHTML = "";
-        }
-      }
+      this._renderErrorBanner("errorBox", this._error, () => {
+        this._error = null;
+      });
 
       if (this._loading) {
         if (askBtn) askBtn.disabled = true;
@@ -622,6 +670,15 @@
 
       if (askBtn) askBtn.disabled = false;
 
+      if (!this._hass) {
+        answerBox.innerHTML = `
+          <div class="garmin-empty-state">
+            Type a question above and click "Ask" to consult your AI Health Coach.
+          </div>
+        `;
+        return;
+      }
+
       // Check if direct response is available
       if (this._directAnswer && this._directAnswer.answer) {
         const fullAnswer = this._directAnswer.answer;
@@ -635,11 +692,13 @@
 
       const answerState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
       if (!answerState) {
-        answerBox.innerHTML = `<div class="garmin-empty-state">Entity ${this._config.answer_entity} not found.</div>`;
+        answerBox.innerHTML = `<div class="garmin-empty-state">Type a question above and click "Ask" to consult your AI Health Coach.</div>`;
         return;
       }
 
-      const fullAnswer = answerState.attributes?.full_answer || (answerState.state !== "unavailable" && answerState.state !== "unknown" ? answerState.state : "");
+      const fullAnswer =
+        answerState.attributes?.full_answer ||
+        (answerState.state !== "unavailable" && answerState.state !== "unknown" ? answerState.state : "");
       const question = answerState.attributes?.question || "";
       const timestamp = answerState.attributes?.timestamp || "";
 
@@ -656,22 +715,25 @@
       if (timestamp) {
         try {
           const d = new Date(timestamp);
-          timeFormatted = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ", " + d.toLocaleDateString();
+          timeFormatted =
+            d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ", " + d.toLocaleDateString();
         } catch (_) {
           timeFormatted = timestamp;
         }
       }
 
-      const renderedAnswer = renderMarkdown(fullAnswer);
-
       answerBox.innerHTML = `
-        ${question ? `
+        ${
+          question
+            ? `
           <div class="garmin-q-banner">
             <div><strong>Q:</strong> ${question}</div>
             ${timeFormatted ? `<div class="garmin-meta-time">${timeFormatted}</div>` : ""}
           </div>
-        ` : ""}
-        <div class="garmin-answer-text">${renderedAnswer}</div>
+        `
+            : ""
+        }
+        <div class="garmin-answer-text">${renderMarkdown(fullAnswer)}</div>
       `;
     }
   }
@@ -679,15 +741,19 @@
   /**
    * 2. Garmin AI Health Report Card
    */
-  class GarminHAIReportCard extends HTMLElement {
+  class GarminHAIReportCard extends GarminCardBase {
     constructor() {
       super();
-      this.attachShadow({ mode: "open" });
       this._viewMode = "long"; // "long" | "short" | "dynamic"
       this._loading = false;
-      this._error = null;
-      this._initialized = false;
-      this._config = {
+    }
+
+    getCardSize() {
+      return 6;
+    }
+
+    _getDefaultConfig() {
+      return {
         title: "Garmin AI Health Report",
         report_entity: "sensor.garmin_ai_health_report_long",
         short_report_entity: "sensor.garmin_ai_health_report_short",
@@ -698,34 +764,8 @@
       };
     }
 
-    setConfig(config) {
-      this._config = Object.assign(
-        {
-          title: "Garmin AI Health Report",
-          report_entity: "sensor.garmin_ai_health_report_long",
-          short_report_entity: "sensor.garmin_ai_health_report_short",
-          selected_report_entity: "sensor.garmin_ai_selected_report",
-          generate_button_entity: "button.garmin_ai_generate_report",
-          last_update_entity: "sensor.garmin_ai_last_update",
-          default_view: "long",
-        },
-        config || {}
-      );
-      this._viewMode = this._config.default_view || "long";
-      if (!this._initialized) {
-        this._render();
-        this._initialized = true;
-      }
-      this._updateContent();
-    }
-
-    set hass(hass) {
-      this._hass = hass;
-      try {
-        this._updateContent();
-      } catch (err) {
-        console.error("Error in GarminHAIReportCard set hass:", err);
-      }
+    static getConfigElement() {
+      return document.createElement("garmin-ha-ai-report-card-editor");
     }
 
     static getStubConfig(hass) {
@@ -735,18 +775,21 @@
         return match || fallback;
       };
       return {
-        type: "custom:garmin-ha-ai-report-card",
         title: "Garmin AI Health Report",
         report_entity: findEntity("sensor.garmin_ai_health_report_long", "sensor.garmin_ai_health_report_long"),
         short_report_entity: findEntity("sensor.garmin_ai_health_report_short", "sensor.garmin_ai_health_report_short"),
         selected_report_entity: findEntity("sensor.garmin_ai_selected_report", "sensor.garmin_ai_selected_report"),
         generate_button_entity: findEntity("button.garmin_ai_generate_report", "button.garmin_ai_generate_report"),
         last_update_entity: findEntity("sensor.garmin_ai_last_update", "sensor.garmin_ai_last_update"),
+        default_view: "long",
       };
     }
 
-    getCardSize() {
-      return 6;
+    setConfig(config) {
+      super.setConfig(config);
+      if (this._config && this._config.default_view) {
+        this._viewMode = this._config.default_view;
+      }
     }
 
     _render() {
@@ -758,7 +801,7 @@
           <div class="garmin-card-header">
             <div class="garmin-card-title">
               <ha-icon icon="mdi:file-document-outline"></ha-icon>
-              <span>${this._config.title}</span>
+              <span>${this._config.title || "Garmin AI Health Report"}</span>
             </div>
             <button class="garmin-btn garmin-btn-secondary" id="refreshBtn">
               <ha-icon icon="mdi:refresh"></ha-icon>
@@ -824,45 +867,26 @@
       if (!this.shadowRoot || !this._config) return;
 
       const reportBox = this.shadowRoot.getElementById("reportBox");
-      const errorBox = this.shadowRoot.getElementById("reportErrorBox");
       if (!reportBox) return;
 
-      if (!this._hass) {
-        reportBox.innerHTML = `
-          <div class="garmin-empty-state">
-            No health report generated yet. Click "Regenerate" to generate a personalized briefing.
-          </div>
-        `;
-        return;
-      }
-
-      // Render Error Banner
-      if (errorBox) {
-        if (this._error) {
-          errorBox.innerHTML = `
-            <div class="garmin-error-banner">
-              <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
-              <div class="garmin-error-text"><strong>AI Notice:</strong> ${this._error}</div>
-              <button class="garmin-error-close" id="closeReportErrorBtn">✕</button>
-            </div>
-          `;
-          const closeBtn = errorBox.querySelector("#closeReportErrorBtn");
-          if (closeBtn) {
-            closeBtn.addEventListener("click", () => {
-              this._error = null;
-              errorBox.innerHTML = "";
-            });
-          }
-        } else {
-          errorBox.innerHTML = "";
-        }
-      }
+      this._renderErrorBanner("reportErrorBox", this._error, () => {
+        this._error = null;
+      });
 
       if (this._loading) {
         reportBox.innerHTML = `
           <div class="garmin-loading-spinner">
             <div class="garmin-spinner"></div>
             <span>Generating fresh AI Health Report...</span>
+          </div>
+        `;
+        return;
+      }
+
+      if (!this._hass) {
+        reportBox.innerHTML = `
+          <div class="garmin-empty-state">
+            No health report generated yet. Click "Regenerate" to generate a personalized briefing.
           </div>
         `;
         return;
@@ -876,7 +900,8 @@
         if (updateState.state && updateState.state !== "unavailable" && updateState.state !== "unknown") {
           try {
             const d = new Date(updateState.state);
-            lastUpdated = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ", " + d.toLocaleDateString();
+            lastUpdated =
+              d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + ", " + d.toLocaleDateString();
           } catch (_) {
             lastUpdated = updateState.state;
           }
@@ -885,10 +910,13 @@
 
       if (this._viewMode === "short") {
         const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
-        contentText = shortState && shortState.state !== "unavailable" && shortState.state !== "unknown" ? shortState.state : "";
+        contentText =
+          shortState && shortState.state !== "unavailable" && shortState.state !== "unknown" ? shortState.state : "";
       } else if (this._viewMode === "dynamic") {
         const dynState = this._hass.states ? this._hass.states[this._config.selected_report_entity] : undefined;
-        contentText = dynState?.attributes?.report_text || (dynState?.state !== "unavailable" && dynState?.state !== "unknown" ? dynState.state : "");
+        contentText =
+          dynState?.attributes?.report_text ||
+          (dynState?.state !== "unavailable" && dynState?.state !== "unknown" ? dynState.state : "");
       } else {
         const longState = this._hass.states ? this._hass.states[this._config.report_entity] : undefined;
         contentText = longState?.attributes?.full_report || longState?.attributes?.short_summary || "";
@@ -913,16 +941,21 @@
   /**
    * 3. Garmin AI Health Overview Card (All-In-One Glance + Q&A + Report)
    */
-  class GarminHAIOverviewCard extends HTMLElement {
+  class GarminHAIOverviewCard extends GarminCardBase {
     constructor() {
       super();
-      this.attachShadow({ mode: "open" });
       this._activeTab = "qa"; // "qa" | "report"
       this._qaLoading = false;
       this._qaError = null;
       this._directAnswer = null;
-      this._initialized = false;
-      this._config = {
+    }
+
+    getCardSize() {
+      return 6;
+    }
+
+    _getDefaultConfig() {
+      return {
         title: "Garmin AI Health Coach",
         steps_entity: "sensor.garmin_steps",
         sleep_entity: "sensor.garmin_sleep_score",
@@ -935,35 +968,8 @@
       };
     }
 
-    setConfig(config) {
-      this._config = Object.assign(
-        {
-          title: "Garmin AI Health Coach",
-          steps_entity: "sensor.garmin_steps",
-          sleep_entity: "sensor.garmin_sleep_score",
-          battery_entity: "sensor.garmin_body_battery",
-          stress_entity: "sensor.garmin_stress_level",
-          hr_entity: "sensor.garmin_resting_heart_rate",
-          short_report_entity: "sensor.garmin_ai_health_report_short",
-          long_report_entity: "sensor.garmin_ai_health_report_long",
-          answer_entity: "sensor.garmin_ai_last_answer",
-        },
-        config || {}
-      );
-      if (!this._initialized) {
-        this._render();
-        this._initialized = true;
-      }
-      this._updateContent();
-    }
-
-    set hass(hass) {
-      this._hass = hass;
-      try {
-        this._updateContent();
-      } catch (err) {
-        console.error("Error in GarminHAIOverviewCard set hass:", err);
-      }
+    static getConfigElement() {
+      return document.createElement("garmin-ha-ai-overview-card-editor");
     }
 
     static getStubConfig(hass) {
@@ -973,7 +979,6 @@
         return match || fallback;
       };
       return {
-        type: "custom:garmin-ha-ai-overview-card",
         title: "Garmin AI Health Coach",
         steps_entity: findEntity("sensor.garmin_steps", "sensor.garmin_steps"),
         sleep_entity: findEntity("sensor.garmin_sleep_score", "sensor.garmin_sleep_score"),
@@ -986,10 +991,6 @@
       };
     }
 
-    getCardSize() {
-      return 6;
-    }
-
     _render() {
       if (!this.shadowRoot) return;
 
@@ -999,7 +1000,7 @@
           <div class="garmin-card-header">
             <div class="garmin-card-title">
               <ha-icon icon="mdi:heart-pulse"></ha-icon>
-              <span>${this._config.title}</span>
+              <span>${this._config.title || "Garmin AI Health Coach"}</span>
             </div>
           </div>
           <div class="garmin-glance-bar" id="glanceBar">
@@ -1108,9 +1109,12 @@
 
       const glanceBar = this.shadowRoot.getElementById("glanceBar");
       const focusBanner = this.shadowRoot.getElementById("focusBanner");
-      const errorBox = this.shadowRoot.getElementById("overviewErrorBox");
       const answerBox = this.shadowRoot.getElementById("overviewAnswerBox");
       const reportBox = this.shadowRoot.getElementById("overviewReportBox");
+
+      this._renderErrorBanner("overviewErrorBox", this._qaError, () => {
+        this._qaError = null;
+      });
 
       if (!this._hass) {
         if (glanceBar) {
@@ -1134,56 +1138,28 @@
         return;
       }
 
-      // Update Error Banner
-      if (errorBox) {
-        if (this._qaError) {
-          errorBox.innerHTML = `
-            <div class="garmin-error-banner">
-              <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
-              <div class="garmin-error-text"><strong>AI Notice:</strong> ${this._qaError}</div>
-              <button class="garmin-error-close" id="closeOverviewErrorBtn">✕</button>
-            </div>
-          `;
-          const closeBtn = errorBox.querySelector("#closeOverviewErrorBtn");
-          if (closeBtn) {
-            closeBtn.addEventListener("click", () => {
-              this._qaError = null;
-              errorBox.innerHTML = "";
-            });
-          }
-        } else {
-          errorBox.innerHTML = "";
-        }
-      }
-
       // Update Glance Metrics
       if (glanceBar) {
-        const getVal = (entityId, fallback = "--") => {
-          if (!this._hass || !this._hass.states) return fallback;
-          const s = this._hass.states[entityId];
-          return s && s.state !== "unavailable" && s.state !== "unknown" ? s.state : fallback;
-        };
-
         glanceBar.innerHTML = `
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Sleep</div>
-            <div class="garmin-metric-val">${getVal(this._config.sleep_entity)}%</div>
+            <div class="garmin-metric-val">${this._getEntityState(this._config.sleep_entity)}%</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Battery</div>
-            <div class="garmin-metric-val">${getVal(this._config.battery_entity)}%</div>
+            <div class="garmin-metric-val">${this._getEntityState(this._config.battery_entity)}%</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Stress</div>
-            <div class="garmin-metric-val">${getVal(this._config.stress_entity)}</div>
+            <div class="garmin-metric-val">${this._getEntityState(this._config.stress_entity)}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Rest HR</div>
-            <div class="garmin-metric-val">${getVal(this._config.hr_entity)}</div>
+            <div class="garmin-metric-val">${this._getEntityState(this._config.hr_entity)}</div>
           </div>
           <div class="garmin-metric-pill">
             <div class="garmin-metric-label">Steps</div>
-            <div class="garmin-metric-val">${getVal(this._config.steps_entity)}</div>
+            <div class="garmin-metric-val">${this._getEntityState(this._config.steps_entity)}</div>
           </div>
         `;
       }
@@ -1191,7 +1167,10 @@
       // Update Focus Banner
       if (focusBanner) {
         const shortState = this._hass.states ? this._hass.states[this._config.short_report_entity] : undefined;
-        const focusText = shortState && shortState.state !== "unavailable" && shortState.state !== "unknown" ? shortState.state : "Ready for today's workout and recovery guidance.";
+        const focusText =
+          shortState && shortState.state !== "unavailable" && shortState.state !== "unknown"
+            ? shortState.state
+            : "Ready for today's workout and recovery guidance.";
         focusBanner.innerHTML = `<strong>💡 Today's Focus:</strong> ${focusText}`;
       }
 
@@ -1213,7 +1192,9 @@
           `;
         } else {
           const ansState = this._hass.states ? this._hass.states[this._config.answer_entity] : undefined;
-          const fullAnswer = ansState?.attributes?.full_answer || (ansState?.state !== "unavailable" && ansState?.state !== "unknown" ? ansState?.state : "");
+          const fullAnswer =
+            ansState?.attributes?.full_answer ||
+            (ansState?.state !== "unavailable" && ansState?.state !== "unknown" ? ansState?.state : "");
           const question = ansState?.attributes?.question || "";
           if (!fullAnswer || fullAnswer === "No question asked yet" || fullAnswer === "unavailable") {
             answerBox.innerHTML = `<div class="garmin-empty-state">Type a coaching question above.</div>`;
@@ -1229,7 +1210,10 @@
       // Update Report View
       if (reportBox) {
         const repState = this._hass.states ? this._hass.states[this._config.long_report_entity] : undefined;
-        const fullRep = repState?.attributes?.full_report || repState?.attributes?.short_summary || (repState?.state !== "unavailable" && repState?.state !== "unknown" ? repState?.state : "");
+        const fullRep =
+          repState?.attributes?.full_report ||
+          repState?.attributes?.short_summary ||
+          (repState?.state !== "unavailable" && repState?.state !== "unknown" ? repState?.state : "");
         if (!fullRep || fullRep === "No report generated yet" || fullRep === "unavailable") {
           reportBox.innerHTML = `<div class="garmin-empty-state">No full report generated yet.</div>`;
         } else {
@@ -1239,7 +1223,161 @@
     }
   }
 
-  // Register Custom Elements with the browser
+  /**
+   * Helper Base Editor for HA visual card configuration forms.
+   */
+  class GarminCardBaseEditor extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: "open" });
+      this._config = null;
+      this._hass = null;
+      this._form = null;
+    }
+
+    _getSchema() {
+      return [];
+    }
+
+    _getLabels() {
+      return {};
+    }
+
+    setConfig(config) {
+      this._config = config || {};
+      this._render();
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      if (this._form) {
+        this._form.hass = hass;
+      }
+    }
+
+    _render() {
+      if (!this.shadowRoot) return;
+
+      this.shadowRoot.innerHTML = `
+        <style>
+          ha-form {
+            display: block;
+            margin-bottom: 8px;
+          }
+        </style>
+        <ha-form id="form"></ha-form>
+      `;
+
+      this._form = this.shadowRoot.getElementById("form");
+      if (this._form) {
+        this._form.hass = this._hass;
+        this._form.data = this._config;
+        this._form.schema = this._getSchema();
+        const labels = this._getLabels();
+        this._form.computeLabel = (schema) => labels[schema.name] || schema.name;
+
+        this._form.addEventListener("value-changed", (ev) => {
+          ev.stopPropagation();
+          const detail = {
+            config: Object.assign({}, this._config, ev.detail.value),
+          };
+          this.dispatchEvent(
+            new CustomEvent("config-changed", {
+              detail: detail,
+              bubbles: true,
+              composed: true,
+            })
+          );
+        });
+      }
+    }
+  }
+
+  class GarminHAIQAQuestionCardEditor extends GarminCardBaseEditor {
+    _getSchema() {
+      return [
+        { name: "title", selector: { text: {} } },
+        { name: "question_entity", selector: { entity: { domain: "text" } } },
+        { name: "button_entity", selector: { entity: { domain: "button" } } },
+        { name: "answer_entity", selector: { entity: { domain: "sensor" } } },
+      ];
+    }
+    _getLabels() {
+      return {
+        title: "Card Title",
+        question_entity: "Question Input Entity",
+        button_entity: "Ask Button Entity",
+        answer_entity: "Answer Sensor Entity",
+      };
+    }
+  }
+
+  class GarminHAIReportCardEditor extends GarminCardBaseEditor {
+    _getSchema() {
+      return [
+        { name: "title", selector: { text: {} } },
+        { name: "report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "short_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "selected_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "generate_button_entity", selector: { entity: { domain: "button" } } },
+        { name: "last_update_entity", selector: { entity: { domain: "sensor" } } },
+        {
+          name: "default_view",
+          selector: {
+            select: {
+              options: [
+                { value: "long", label: "Full Report" },
+                { value: "short", label: "Daily Summary" },
+                { value: "dynamic", label: "Dynamic View" },
+              ],
+            },
+          },
+        },
+      ];
+    }
+    _getLabels() {
+      return {
+        title: "Card Title",
+        report_entity: "Long Report Sensor",
+        short_report_entity: "Short Report Sensor",
+        selected_report_entity: "Selected Report Sensor",
+        generate_button_entity: "Generate Button Entity",
+        last_update_entity: "Last Update Sensor",
+        default_view: "Default Active View",
+      };
+    }
+  }
+
+  class GarminHAIOverviewCardEditor extends GarminCardBaseEditor {
+    _getSchema() {
+      return [
+        { name: "title", selector: { text: {} } },
+        { name: "sleep_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "battery_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "stress_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "hr_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "steps_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "short_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "long_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "answer_entity", selector: { entity: { domain: "sensor" } } },
+      ];
+    }
+    _getLabels() {
+      return {
+        title: "Card Title",
+        sleep_entity: "Sleep Score Sensor",
+        battery_entity: "Body Battery Sensor",
+        stress_entity: "Stress Level Sensor",
+        hr_entity: "Resting Heart Rate Sensor",
+        steps_entity: "Steps Sensor",
+        short_report_entity: "Short Report Sensor",
+        long_report_entity: "Long Report Sensor",
+        answer_entity: "Last Answer Sensor",
+      };
+    }
+  }
+
+  // Register Custom Card Elements with the browser
   if (!customElements.get("garmin-ha-ai-qa-card")) {
     customElements.define("garmin-ha-ai-qa-card", GarminHAIQAQuestionCard);
   }
@@ -1250,26 +1388,37 @@
     customElements.define("garmin-ha-ai-overview-card", GarminHAIOverviewCard);
   }
 
+  // Register Custom Card Editor Elements with the browser
+  if (!customElements.get("garmin-ha-ai-qa-card-editor")) {
+    customElements.define("garmin-ha-ai-qa-card-editor", GarminHAIQAQuestionCardEditor);
+  }
+  if (!customElements.get("garmin-ha-ai-report-card-editor")) {
+    customElements.define("garmin-ha-ai-report-card-editor", GarminHAIReportCardEditor);
+  }
+  if (!customElements.get("garmin-ha-ai-overview-card-editor")) {
+    customElements.define("garmin-ha-ai-overview-card-editor", GarminHAIOverviewCardEditor);
+  }
+
   // Register Cards with Home Assistant Lovelace Card Picker (window.customCards)
   window.customCards = window.customCards || [];
 
   const cardsToRegister = [
     {
-      type: "garmin-ha-ai-qa-card",
+      type: "custom:garmin-ha-ai-qa-card",
       name: "Garmin AI Coach Q&A",
       description: "Interactive Q&A text field, ask button, and live formatted coach answer view.",
       preview: true,
       documentationURL: "https://github.com/j333c/garmin-ha-ai",
     },
     {
-      type: "garmin-ha-ai-report-card",
+      type: "custom:garmin-ha-ai-report-card",
       name: "Garmin AI Health Report",
       description: "Detailed AI health and recovery report with on-demand refresh and formatted Markdown view.",
       preview: true,
       documentationURL: "https://github.com/j333c/garmin-ha-ai",
     },
     {
-      type: "garmin-ha-ai-overview-card",
+      type: "custom:garmin-ha-ai-overview-card",
       name: "Garmin AI Health Overview",
       description: "Complete Garmin recovery glance metrics, daily coaching focus, interactive Q&A, and full reports.",
       preview: true,

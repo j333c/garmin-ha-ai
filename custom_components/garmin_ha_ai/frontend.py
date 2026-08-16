@@ -16,11 +16,11 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_FILE_PATH = FRONTEND_DIR / FRONTEND_JS_FILE
 MANIFEST_PATH = Path(__file__).parent / "manifest.json"
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 if MANIFEST_PATH.exists():
     try:
         manifest_data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-        VERSION = manifest_data.get("version", "0.1.2")
+        VERSION = manifest_data.get("version", "0.1.3")
     except Exception:
         pass
 
