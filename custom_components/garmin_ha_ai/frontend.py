@@ -40,7 +40,7 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
         LOGGER.warning("Garmin HA AI frontend card file not found at %s", FRONTEND_FILE_PATH)
         return
 
-    # 1. Register static path with Home Assistant HTTP server
+    # 1. Register static path with Home Assistant HTTP server (register directory so files are served properly)
     if hasattr(hass, "http") and hass.http is not None:
         try:
             if hasattr(hass.http, "async_register_static_paths"):
@@ -49,20 +49,20 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
                 await hass.http.async_register_static_paths(
                     [
                         StaticPathConfig(
-                            url_path=FRONTEND_URL,
-                            path=str(FRONTEND_FILE_PATH),
-                            cache_headers=True,
+                            url_path=FRONTEND_URL_BASE,
+                            path=str(FRONTEND_DIR),
+                            cache_headers=False,
                         )
                     ]
                 )
-                LOGGER.debug("Registered frontend static path via async_register_static_paths: %s", FRONTEND_URL)
+                LOGGER.debug("Registered frontend static path via async_register_static_paths: %s -> %s", FRONTEND_URL_BASE, FRONTEND_DIR)
             elif hasattr(hass.http, "register_static_path"):
                 hass.http.register_static_path(
-                    FRONTEND_URL,
-                    str(FRONTEND_FILE_PATH),
-                    cache_headers=True,
+                    FRONTEND_URL_BASE,
+                    str(FRONTEND_DIR),
+                    cache_headers=False,
                 )
-                LOGGER.debug("Registered frontend static path via register_static_path: %s", FRONTEND_URL)
+                LOGGER.debug("Registered frontend static path via register_static_path: %s -> %s", FRONTEND_URL_BASE, FRONTEND_DIR)
         except Exception as err:
             LOGGER.warning("Could not register static path for Garmin HA AI cards: %s", err)
 

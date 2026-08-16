@@ -6,8 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.garmin_ha_ai.frontend import (
+    FRONTEND_DIR,
     FRONTEND_FILE_PATH,
     FRONTEND_URL,
+    FRONTEND_URL_BASE,
     FRONTEND_URL_VERSIONED,
     async_setup_frontend,
 )
@@ -53,8 +55,8 @@ async def test_async_setup_frontend_registers_static_path_and_extra_js(hass):
         hass.http.async_register_static_paths.assert_called_once()
         call_args = hass.http.async_register_static_paths.call_args[0][0]
         assert len(call_args) == 1
-        assert call_args[0].url_path == FRONTEND_URL
-        assert call_args[0].path == str(FRONTEND_FILE_PATH)
+        assert call_args[0].url_path == FRONTEND_URL_BASE
+        assert call_args[0].path == str(FRONTEND_DIR)
 
         # Check extra js url was added
         mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
@@ -85,9 +87,9 @@ async def test_async_setup_frontend_fallback_register_static_path(hass):
     with patch("homeassistant.components.frontend.add_extra_js_url") as mock_add_js:
         await async_setup_frontend(hass)
         hass.http.register_static_path.assert_called_once_with(
-            FRONTEND_URL,
-            str(FRONTEND_FILE_PATH),
-            cache_headers=True,
+            FRONTEND_URL_BASE,
+            str(FRONTEND_DIR),
+            cache_headers=False,
         )
         mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
 
