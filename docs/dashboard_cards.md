@@ -1,16 +1,48 @@
 # Lovelace Dashboard Card Patterns & Setup Guide
 
-This guide provides complete, copy-and-paste Lovelace dashboard configurations for the `garmin-ha-ai` integration. It is designed around three core user needs:
-
-1. **⚡ Fast Health Status (Brief Glance)**: At-a-glance recovery, sleep, battery, stress, and steps paired with a concise 1–2 sentence AI daily coaching summary.
-2. **💬 Instant Q&A Coach**: Ask ad-hoc health, training, and recovery questions directly from your dashboard with zero helper setup.
-3. **📋 Deep Insight View (Long Report)**: Full-width, detailed Markdown health analysis with multi-day training plans and on-demand refresh.
+This guide provides both **built-in 1-click UI custom cards** and **copy-and-paste YAML configurations** for the `garmin-ha-ai` integration.
 
 ---
 
-## 🌟 Complete Dashboard Presets
+## 🚀 Built-in UI Custom Cards (Zero Configuration / Card Picker)
 
-### Preset A: Modern Sections Dashboard (Home Assistant 2024.3+)
+The integration automatically registers 3 native Lovelace custom cards with Home Assistant. You can add them directly from the Home Assistant UI without writing any YAML:
+
+1. On your Dashboard, click **⋮ (Top right)** → **Edit Dashboard**.
+2. Click **+ Add Card**.
+3. Search for **Garmin AI** to choose one of the native cards:
+
+| Card Name | Card Type | Description |
+| :--- | :--- | :--- |
+| **Garmin AI Coach Q&A** | `custom:garmin-ha-ai-qa-card` | Text input field, Ask button, loading indicator, and live formatted AI answer view. |
+| **Garmin AI Health Report** | `custom:garmin-ha-ai-report-card` | Full daily health report with on-demand regenerate button, view tabs (Full / Summary / Dynamic), and formatted Markdown viewer. |
+| **Garmin AI Health Overview** | `custom:garmin-ha-ai-overview-card` | All-in-one card featuring glance metrics (Sleep, Battery, Stress, HR, Steps), daily focus banner, and interactive Q&A/Report tabs. |
+
+### Quick YAML for Built-in Cards:
+
+```yaml
+# Instant Q&A Coach Card
+type: custom:garmin-ha-ai-qa-card
+title: Garmin AI Coach Q&A
+```
+
+```yaml
+# Comprehensive Daily Health Report Card
+type: custom:garmin-ha-ai-report-card
+title: Garmin AI Health Report
+```
+
+```yaml
+# All-in-One Overview Card
+type: custom:garmin-ha-ai-overview-card
+title: Garmin AI Health Coach
+```
+
+---
+
+## 🌟 Complete Dashboard Presets (Standard Built-in HA Cards)
+
+If you prefer building dashboards using standard Home Assistant built-in cards (`glance`, `entities`, `markdown`):
 
 If your Home Assistant dashboard uses the modern **Sections** layout, paste this YAML directly into a new or existing view:
 

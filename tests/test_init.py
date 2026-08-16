@@ -17,9 +17,11 @@ from custom_components.garmin_ha_ai.const import DOMAIN, PLATFORMS
 
 @pytest.mark.asyncio
 async def test_async_setup(hass: HomeAssistant) -> None:
-    """Test async_setup registers domain data and services."""
-    assert await async_setup(hass, {}) is True
-    assert DOMAIN in hass.data
+    """Test async_setup registers domain data, services, and frontend."""
+    with patch("custom_components.garmin_ha_ai.async_setup_frontend", new_callable=AsyncMock) as mock_fe:
+        assert await async_setup(hass, {}) is True
+        assert DOMAIN in hass.data
+        mock_fe.assert_called_once_with(hass)
 
 
 @pytest.mark.asyncio
@@ -38,10 +40,14 @@ async def test_async_setup_entry_success(hass: HomeAssistant) -> None:
     with patch(
         "custom_components.garmin_ha_ai.coordinator.GarminDataUpdateCoordinator.async_config_entry_first_refresh",
         new_callable=AsyncMock,
-    ) as mock_refresh:
+    ) as mock_refresh, patch(
+        "custom_components.garmin_ha_ai.async_setup_frontend",
+        new_callable=AsyncMock,
+    ) as mock_fe:
         result = await async_setup_entry(hass, entry)
 
         assert result is True
+        mock_fe.assert_called_once_with(hass)
         assert entry.entry_id in hass.data[DOMAIN]
         assert "storage" in hass.data[DOMAIN][entry.entry_id]
         assert "coordinator" in hass.data[DOMAIN][entry.entry_id]

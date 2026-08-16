@@ -121,17 +121,17 @@ data:
 
 ---
 
-## 🎨 Lovelace Dashboard Layouts
+## 🎨 Lovelace Dashboard Cards
+ 
+The integration automatically registers **3 native Lovelace custom cards** directly into Home Assistant's UI Card Picker (`+ Add Card` → search for **Garmin AI**):
 
-The integration is built around three clear dashboard tiers to make health monitoring effortless:
+1. **💬 Garmin AI Coach Q&A Card** (`custom:garmin-ha-ai-qa-card`): Instant text field, Ask button, loading spinner, and live formatted coach answer view.
+2. **📋 Garmin AI Health Report Card** (`custom:garmin-ha-ai-report-card`): Detailed AI health and recovery report viewer with regenerate button and mode tabs.
+3. **🏃 Garmin AI Health Overview Card** (`custom:garmin-ha-ai-overview-card`): All-in-one card with glance recovery metrics (Sleep, Battery, Stress, HR, Steps), daily focus banner, and interactive Q&A/Report tabs.
 
-1. **⚡ Fast Health Status**: Glance metrics + concise daily AI recommendation.
-2. **💬 Instant Q&A Coach**: Zero-helper text input to ask recovery and workout questions anytime.
-3. **📋 Deep Insight View**: Rich full Markdown analysis with multi-day training advice.
+> 📖 **Full Guide & Presets**: For complete presets and manual standard card YAML examples, see the [**Lovelace Dashboard Setup Guide**](docs/dashboard_cards.md).
 
-> 📖 **Full Guide & Presets**: For complete copy-paste dashboard presets (Sections & Classic Views), see the [**Lovelace Dashboard Setup Guide**](docs/dashboard_cards.md).
-
-### Quick-Start Vertical Stack Example
+### Quick-Start Vertical Stack Example (Standard HA Cards)
 
 ```yaml
 type: vertical-stack

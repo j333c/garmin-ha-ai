@@ -229,6 +229,21 @@ if "homeassistant" not in sys.modules:
     select_mock.SelectEntity = MockSelectEntity
     components_mock.select = select_mock
 
+    frontend_mock = MagicMock()
+    frontend_mock.add_extra_js_url = MagicMock()
+    components_mock.frontend = frontend_mock
+    sys.modules["homeassistant.components.frontend"] = frontend_mock
+
+    http_mock = MagicMock()
+    class MockStaticPathConfig:
+        def __init__(self, url_path, path, cache_headers=True):
+            self.url_path = url_path
+            self.path = path
+            self.cache_headers = cache_headers
+    http_mock.StaticPathConfig = MockStaticPathConfig
+    components_mock.http = http_mock
+    sys.modules["homeassistant.components.http"] = http_mock
+
     sys.modules["homeassistant.components"] = components_mock
     sys.modules["homeassistant.components.sensor"] = sensor_mock
     sys.modules["homeassistant.components.button"] = button_mock
@@ -535,6 +550,11 @@ def hass() -> MagicMock:
     services_mock.async_call = AsyncMock(side_effect=async_call)
 
     hass_inst.services = services_mock
+
+    http_server_mock = MagicMock()
+    http_server_mock.async_register_static_paths = AsyncMock()
+    http_server_mock.register_static_path = MagicMock()
+    hass_inst.http = http_server_mock
 
     async def async_add_executor_job(target: Any, *args: Any) -> Any:
         res = target(*args)

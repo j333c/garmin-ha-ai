@@ -12,6 +12,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import GarminDataUpdateCoordinator
+from .frontend import async_setup_frontend
 from .garmin_client import GarminClient
 from .services import async_setup_services
 from .storage import GarminStorage
@@ -31,12 +32,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Garmin HA AI component."""
     hass.data.setdefault(DOMAIN, {})
     await async_setup_services(hass)
+    await async_setup_frontend(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Garmin HA AI from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+    await async_setup_frontend(hass)
 
     storage = GarminStorage(hass)
     client = GarminClient(hass, storage)
