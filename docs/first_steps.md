@@ -17,7 +17,7 @@ Once the integration is installed and Home Assistant has been restarted:
 ## Step 2: Garmin Authentication & MFA
 
 1. Enter your **Garmin Connect Email** and **Password**.
-2. Select your initial **AI Provider** (`Google Gemini` or `OpenAI / Custom Endpoint`).
+2. Select your **AI Provider** using the radio buttons (`Google Gemini` or `OpenAI (or compatible)`).
 3. Enter your **AI API Key**.
 4. *(Optional)* Enter your initial **Fitness Goals** (e.g., *"Training for a sub-4:00 marathon in October; 40 km/week running"*).
 5. Click **Submit**.
@@ -46,9 +46,9 @@ Once added, you can customize polling, AI models, custom endpoints, coaching sty
 | **Coaching Directives & Tone** | *Blank* | Personality instructions for the AI coach (e.g., *"Be direct and analytical. Prioritize recovery and sleep quality over high mileage."*). |
 | **Notification Target Service** | *Blank* | Comma-separated Home Assistant notify services (e.g., `notify.mobile_app_my_phone, notify.persistent_notification`). |
 | **Daily Briefing Schedule** | `06:00:00` | Time of day (`HH:MM:SS`) to automatically pull data, generate the daily briefing, and send notifications. |
-| **AI Provider** | `gemini` | `gemini` (Google Gemini) or `openai` (OpenAI / Local LLMs). |
-| **AI Model Name** | `gemini-2.0-flash` / `gpt-4o` | The model identifier (e.g., `gemini-2.0-flash`, `gpt-4o-mini`, `llama3.3:70b`, `mistral-large`). |
-| **Custom AI Base URL** | `https://api.openai.com/v1` | Custom endpoint URL for local/alternative OpenAI-compatible APIs (e.g., `http://192.168.1.100:11434/v1` for Ollama). |
+| **AI Provider** | `Google Gemini` | Radio button selection: `Google Gemini` or `OpenAI (or compatible)`. |
+| **AI Model Name** | `gemini-2.5-flash` / `gpt-4o` | Dynamic dropdown populated via API model discovery (e.g., `gemini-2.5-flash`, `gpt-4o`, `gpt-4o-mini`, `llama3.3:70b`, `mistral:latest`), with support for custom typed model names. |
+| **Custom AI Base URL** | `https://api.openai.com/v1` | Custom endpoint URL for local/alternative OpenAI-compatible APIs (e.g., `http://192.168.1.100:11434/v1` for Ollama, LocalAI, vLLM). |
 
 ---
 
@@ -161,4 +161,11 @@ action:
 ## Need Help or Found an Issue?
 
 * [Installation Guide](installation.md)
+* [Lovelace Dashboard Guide](dashboard_cards.md)
 * [GitHub Issues](https://github.com/j333c/garmin-ha-ai/issues)
+
+---
+
+> [!NOTE]
+> **AI & BMAD Method Disclaimer**: This integration was created fully through AI utilizing the [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) and builds upon open-source foundations including [Home Assistant](https://www.home-assistant.io/), [python-garminconnect](https://github.com/cyberjunky/python-garminconnect), [Google GenAI SDK](https://github.com/googleapis/python-genai), and [HTTPX](https://www.python-httpx.org/).
+

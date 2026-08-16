@@ -82,5 +82,13 @@
         }
       }
     }
+  },
+  "selector": {
+    "ai_provider": {
+      "options": {
+        "gemini": "Google Gemini",
+        "openai": "OpenAI (oder kompatibel)"
+      }
+    }
   }
 }

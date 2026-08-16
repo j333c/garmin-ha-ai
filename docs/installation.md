@@ -92,3 +92,9 @@ After Home Assistant restarts:
 1. Go to **Settings** → **System** → **Logs**.
 2. Filter for `garmin_ha_ai` or verify there are no startup errors. Home Assistant will automatically install required Python dependencies (`garminconnect`, `google-genai`, `httpx`) on first startup.
 3. Proceed to the [First Steps Guide](first_steps.md) to set up and configure your integration.
+
+---
+
+> [!NOTE]
+> **AI & BMAD Method Disclaimer**: This integration was created fully through AI utilizing the [BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD) and builds upon open-source foundations including [Home Assistant](https://www.home-assistant.io/), [python-garminconnect](https://github.com/cyberjunky/python-garminconnect), [Google GenAI SDK](https://github.com/googleapis/python-genai), and [HTTPX](https://www.python-httpx.org/).
+

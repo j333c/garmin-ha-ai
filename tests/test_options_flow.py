@@ -168,3 +168,30 @@ async def test_options_flow_model_discovery_and_time_selector(hass: HomeAssistan
         assert result["type"] == "form"
         mock_list.assert_called_once_with("valid_gemini_key", hass=hass)
 
+
+@pytest.mark.asyncio
+async def test_options_flow_openai_model_discovery(hass: HomeAssistant) -> None:
+    """Test options flow dynamically fetches models when AI provider is openai."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garmin Test",
+        data={"username": "testuser", "ai_provider": "openai", "ai_api_key": "openai_api_key"},
+        options={"ai_base_url": "http://localhost:11434/v1"},
+    )
+    entry.add_to_hass(hass)
+
+    flow = GarminHaAiOptionsFlowHandler(entry)
+    flow.hass = hass
+
+    with patch(
+        "custom_components.garmin_ha_ai.options_flow.async_list_openai_models",
+        new_callable=AsyncMock,
+        return_value=["llama3.3:70b", "mistral:latest"],
+    ) as mock_list:
+        result = await flow.async_step_init(user_input=None)
+        assert result["type"] == "form"
+        mock_list.assert_called_once_with(
+            "openai_api_key", base_url="http://localhost:11434/v1", hass=hass
+        )
+
+

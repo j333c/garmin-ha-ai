@@ -14,6 +14,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import selector
 
 from .const import (
     CONF_AI_API_KEY,
@@ -83,7 +84,19 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_GARMIN_PASSWORD): str,
                 vol.Required(
                     CONF_AI_PROVIDER, default=DEFAULT_AI_PROVIDER
-                ): vol.In([PROVIDER_GEMINI, PROVIDER_OPENAI]),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(
+                                value=PROVIDER_GEMINI, label="Google Gemini"
+                            ),
+                            selector.SelectOptionDict(
+                                value=PROVIDER_OPENAI, label="OpenAI (or compatible)"
+                            ),
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
                 vol.Required(CONF_AI_API_KEY): str,
                 vol.Optional(CONF_FITNESS_GOALS, default=""): str,
             }

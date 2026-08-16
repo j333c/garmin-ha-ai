@@ -18,7 +18,7 @@ from .base import (
     BaseAIProvider,
 )
 from .gemini import GeminiProvider, async_list_gemini_models
-from .openai import OpenAIProvider
+from .openai import OpenAIProvider, async_list_openai_models
 from .prompt import (
     assemble_qa_prompt,
     assemble_report_prompt,
@@ -36,6 +36,7 @@ __all__ = [
     "AIEngineTimeoutError",
     "get_ai_provider",
     "async_list_gemini_models",
+    "async_list_openai_models",
     "assemble_report_prompt",
     "assemble_qa_prompt",
     "parse_ai_health_report",

@@ -272,3 +272,107 @@ async def test_retry_helper_success_on_retry() -> None:
         )
         assert result == "success"
         assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_async_list_openai_models_empty_key_fallback() -> None:
+    """Test async_list_openai_models returns fallback models if API key is empty on default endpoint."""
+    from custom_components.garmin_ha_ai.ai_engine.openai import async_list_openai_models
+    from custom_components.garmin_ha_ai.const import FALLBACK_OPENAI_MODELS
+
+    models = await async_list_openai_models(api_key="", base_url="https://api.openai.com/v1")
+    assert models == list(FALLBACK_OPENAI_MODELS)
+
+
+@pytest.mark.asyncio
+async def test_async_list_openai_models_success() -> None:
+    """Test async_list_openai_models parses and filters OpenAI models correctly."""
+    from custom_components.garmin_ha_ai.ai_engine.openai import async_list_openai_models
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "data": [
+            {"id": "gpt-4o"},
+            {"id": "gpt-4o-mini"},
+            {"id": "text-embedding-3-small"},
+            {"id": "tts-1"},
+            {"id": "o3-mini"},
+            {"id": "gpt-4.5-preview"},
+        ]
+    }
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_resp
+
+        models = await async_list_openai_models(
+            api_key="valid_key", base_url="https://api.openai.com/v1"
+        )
+
+        assert "gpt-4o" in models
+        assert "gpt-4o-mini" in models
+        assert "o3-mini" in models
+        assert "gpt-4.5-preview" in models
+        assert "text-embedding-3-small" not in models
+        assert "tts-1" not in models
+        # Verify fallback items are retained if missing
+        assert "gpt-4-turbo" in models
+
+
+@pytest.mark.asyncio
+async def test_async_list_openai_models_custom_endpoint() -> None:
+    """Test async_list_openai_models queries custom local endpoint like Ollama."""
+    from custom_components.garmin_ha_ai.ai_engine.openai import async_list_openai_models
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "data": [
+            {"id": "llama3.3:70b"},
+            {"id": "mistral:latest"},
+        ]
+    }
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = mock_resp
+
+        models = await async_list_openai_models(
+            api_key="", base_url="http://localhost:11434/v1"
+        )
+
+        assert "llama3.3:70b" in models
+        assert "mistral:latest" in models
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert args[0] == "http://localhost:11434/v1/models"
+
+
+@pytest.mark.asyncio
+async def test_async_list_openai_models_error_fallback() -> None:
+    """Test async_list_openai_models returns fallback models on error or non-200 response."""
+    from custom_components.garmin_ha_ai.ai_engine.openai import async_list_openai_models
+    from custom_components.garmin_ha_ai.const import FALLBACK_OPENAI_MODELS
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = httpx.RequestError("Connection failed")
+
+        models = await async_list_openai_models(
+            api_key="valid_key", base_url="https://api.openai.com/v1"
+        )
+        assert models == list(FALLBACK_OPENAI_MODELS)
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_list_models_method() -> None:
+    """Test OpenAIProvider.async_list_models delegates to async_list_openai_models."""
+    provider = OpenAIProvider(api_key="fake_key", base_url="https://api.openai.com/v1")
+
+    with patch(
+        "custom_components.garmin_ha_ai.ai_engine.openai.async_list_openai_models",
+        new_callable=AsyncMock,
+        return_value=["discovered-model-1", "discovered-model-2"],
+    ) as mock_list:
+        models = await provider.async_list_models()
+        assert models == ["discovered-model-1", "discovered-model-2"]
+        mock_list.assert_called_once()
+

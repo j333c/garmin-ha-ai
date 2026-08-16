@@ -303,11 +303,16 @@ if "homeassistant" not in sys.modules:
     def mock_selector(selector_dict):
         return lambda val: val
 
+    class MockSelectOptionDict(dict):
+        def __init__(self, value, label):
+            super().__init__(value=value, label=label)
+
     selector_mock = MagicMock()
     selector_mock.selector = mock_selector
     selector_mock.SelectSelector = MockSelectSelector
     selector_mock.SelectSelectorConfig = MockSelectSelectorConfig
     selector_mock.SelectSelectorMode = MockSelectSelectorMode
+    selector_mock.SelectOptionDict = MockSelectOptionDict
     selector_mock.TimeSelector = MockTimeSelector
     selector_mock.TimeSelectorConfig = MockTimeSelectorConfig
     sys.modules["homeassistant.helpers.selector"] = selector_mock
@@ -442,6 +447,12 @@ if "httpx" not in sys.modules:
 
         async def __aexit__(self, *args):
             pass
+
+        async def get(self, *args, **kwargs):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = {"data": [{"id": "gpt-4o"}]}
+            return resp
 
         async def post(self, *args, **kwargs):
             resp = MagicMock()

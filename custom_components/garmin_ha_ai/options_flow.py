@@ -10,7 +10,7 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from .ai_engine import async_list_gemini_models
+from .ai_engine import async_list_gemini_models, async_list_openai_models
 from .const import (
     CONF_AI_API_KEY,
     CONF_AI_BASE_URL,
@@ -98,7 +98,12 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         if provider == PROVIDER_GEMINI:
             available_models = await async_list_gemini_models(api_key, hass=self.hass)
         else:
-            available_models = list(FALLBACK_OPENAI_MODELS)
+            base_url = current_options.get(
+                CONF_AI_BASE_URL, current_data.get(CONF_AI_BASE_URL, "")
+            )
+            available_models = await async_list_openai_models(
+                api_key, base_url=base_url, hass=self.hass
+            )
 
         if current_model and current_model not in available_models:
             available_models.insert(0, current_model)
@@ -140,7 +145,19 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_AI_PROVIDER,
                     default=provider,
-                ): vol.In([PROVIDER_GEMINI, PROVIDER_OPENAI]),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(
+                                value=PROVIDER_GEMINI, label="Google Gemini"
+                            ),
+                            selector.SelectOptionDict(
+                                value=PROVIDER_OPENAI, label="OpenAI (or compatible)"
+                            ),
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
                 vol.Optional(
                     CONF_AI_API_KEY,
                     default=api_key,
@@ -168,4 +185,5 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=options_schema,
         )
+
 

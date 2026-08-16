@@ -4,18 +4,22 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
+[![Release](https://img.shields.io/badge/Release-v0.5.0--rc1-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
 
 A privacy-first, subscription-free **Home Assistant custom integration** that pulls your daily health and performance metrics from **Garmin Connect** and delivers personalized, context-aware AI coaching briefings and interactive health intelligence.
+
+> [!NOTE]
+> ### 🤖 AI & BMAD Method Disclaimer
+> This integration — including its architecture, implementation, comprehensive test suite, Lovelace cards, and documentation — was **fully created with AI** using the [**BMAD Method**](https://github.com/bmad-code-org/BMAD-METHOD) (Breakthrough Method for Agile AI-Driven Development).
 
 ---
 
 ## 🌟 Highlights
 
 * **🔄 Automated Metric Sync**: Seamlessly syncs Sleep Score, Body Battery, Stress Level, Resting Heart Rate, HRV, Steps, Weight, and logged workout activities.
-* **🧠 Pluggable AI Engine**: Native out-of-the-box support for:
-  * **Google Gemini SDK** (e.g., `gemini-2.0-flash`, `gemini-1.5-pro`)
-  * **Generic OpenAI / OpenAI-Compatible Endpoints** (e.g., OpenAI `gpt-4o`, Ollama, LocalAI, vLLM, LM Studio, Groq, Mistral).
+* **🧠 Pluggable AI Engine (Radio-Button Selection & Dynamic Discovery)**:
+  * **Google Gemini SDK** (e.g., `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash`) with dynamic model discovery.
+  * **OpenAI & OpenAI-Compatible Endpoints** (e.g., `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`, or local endpoints like Ollama, LM Studio, vLLM, LocalAI, Groq) with dynamic `/models` endpoint discovery.
 * **🎯 5-Block Context Assembler**: AI recommendations are strictly grounded in your **rolling local metric history (up to 90 days)**, current recovery state, personalized **fitness goals**, and custom **coaching tone directives**.
 * **💬 Interactive AI Health Coach**: Ask ad-hoc coaching questions via Home Assistant service calls (`garmin_ha_ai.ask_question`) or interactive dashboard buttons.
 * **📲 Multi-Channel Notifications**: Receive your customized daily morning health briefing via Home Assistant Companion App mobile push notifications and persistent notifications.
@@ -234,6 +238,22 @@ Home Assistant will raise a notification and trigger a **Reauth Flow**. Simply c
 
 ---
 
+## 💖 Acknowledgements & Built With
+
+This integration is built with and powered by the following open-source frameworks, libraries, and tools:
+
+* **[BMAD Method](https://github.com/bmad-code-org/BMAD-METHOD)** — The breakthrough agile AI-driven framework utilized for autonomous end-to-end architecture, development, testing, and lifecycle management of this project.
+* **[Home Assistant](https://www.home-assistant.io/)** ([GitHub](https://github.com/home-assistant/core)) — The open-source home automation platform.
+* **[python-garminconnect](https://github.com/cyberjunky/python-garminconnect)** — Python library for asynchronous and synchronous communication with Garmin Connect.
+* **[Google GenAI SDK](https://github.com/googleapis/python-genai)** (`google-genai`) — The official Python SDK for Google Gemini models.
+* **[HTTPX](https://www.python-httpx.org/)** ([GitHub](https://github.com/encode/httpx)) — High-performance async HTTP client powering OpenAI and OpenAI-compatible API communication.
+* **[HACS](https://hacs.xyz/)** — Home Assistant Community Store.
+* **[Voluptuous](https://github.com/alecthomas/voluptuous)** — Data validation library for Home Assistant configuration and option flows.
+* **[pytest](https://docs.pytest.org/)** & **[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)** — Testing framework and Home Assistant test fixtures.
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+

@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from ..const import FALLBACK_OPENAI_MODELS
 from .base import (
     AIEngineClientError,
     AIEngineError,
@@ -27,12 +28,23 @@ class OpenAIProvider(BaseAIProvider):
         model: str = "gpt-4o",
         base_url: str | None = None,
         timeout: float = 30.0,
+        hass: Any | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize OpenAI provider."""
         url = (base_url or "https://api.openai.com/v1").rstrip("/")
         super().__init__(api_key=api_key, model=model, base_url=url)
         self.timeout = timeout
+        self.hass = hass
+
+    async def async_list_models(self) -> list[str]:
+        """Discover available models from OpenAI or compatible endpoint."""
+        return await async_list_openai_models(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            hass=self.hass,
+            timeout=min(self.timeout, 10.0),
+        )
 
     async def async_generate_response(
         self, prompt: str, system_instruction: str | None = None
@@ -106,3 +118,83 @@ class OpenAIProvider(BaseAIProvider):
             retry_exceptions=(AIEngineError, AIEngineTimeoutError),
             exclude_exceptions=(AIEngineQuotaError, AIEngineClientError),
         )
+
+
+async def async_list_openai_models(
+    api_key: str,
+    base_url: str | None = None,
+    hass: Any | None = None,
+    timeout: float = 10.0,
+) -> list[str]:
+    """Fetch available models from OpenAI or OpenAI-compatible endpoint asynchronously."""
+    url = (base_url or "https://api.openai.com/v1").rstrip("/")
+
+    # If default endpoint and no API key, return fallback immediately
+    if not api_key and "api.openai.com" in url:
+        return list(FALLBACK_OPENAI_MODELS)
+
+    endpoint = f"{url}/models"
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(endpoint, headers=headers)
+            if response.status_code != 200:
+                _LOGGER.debug(
+                    "Failed to fetch OpenAI models (%s): %s",
+                    response.status_code,
+                    response.text,
+                )
+                return list(FALLBACK_OPENAI_MODELS)
+
+            payload = response.json()
+            data = payload.get("data")
+            if not isinstance(data, list):
+                return list(FALLBACK_OPENAI_MODELS)
+
+            discovered: list[str] = []
+            is_official_openai = "api.openai.com" in url
+
+            # Common non-chat model keywords to exclude when querying official OpenAI API
+            exclude_keywords = (
+                "embedding",
+                "tts",
+                "whisper",
+                "dall-e",
+                "moderation",
+                "babbage",
+                "davinci",
+                "canary",
+                "audio",
+                "realtime",
+                "transcription",
+                "translation",
+            )
+
+            for item in data:
+                if isinstance(item, dict):
+                    model_id = item.get("id")
+                    if model_id and isinstance(model_id, str):
+                        m_lower = model_id.lower()
+                        if is_official_openai:
+                            # Filter out non-chat / non-completion models on OpenAI
+                            if any(k in m_lower for k in exclude_keywords):
+                                continue
+                        if model_id not in discovered:
+                            discovered.append(model_id)
+
+            if discovered:
+                # Merge discovered models with fallback models avoiding duplicates
+                combined: list[str] = list(discovered)
+                for fb in FALLBACK_OPENAI_MODELS:
+                    if fb not in combined:
+                        combined.append(fb)
+                return combined
+
+    except Exception as err:
+        _LOGGER.debug("Error during dynamic OpenAI model discovery: %s", err)
+
+    return list(FALLBACK_OPENAI_MODELS)
+

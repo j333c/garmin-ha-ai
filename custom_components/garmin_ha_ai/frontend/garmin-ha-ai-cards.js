@@ -1470,7 +1470,7 @@
   }
 
   console.info(
-    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.1.5) ",
+    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.5.0-rc1) ",
     "color: white; background: #03a9f4; font-weight: 700; border-radius: 3px 0 0 3px;",
     "color: #03a9f4; background: rgba(3, 169, 244, 0.1); font-weight: 700; border-radius: 0 3px 3px 0;"
   );

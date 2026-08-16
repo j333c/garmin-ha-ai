@@ -288,6 +288,9 @@ def test_translations_consistency() -> None:
         assert "reauth_confirm" in data["config"]["step"]
         assert "options" in data
         assert "init" in data["options"]["step"]
+        assert "selector" in data
+        assert "ai_provider" in data["selector"]
+
 
 
 
