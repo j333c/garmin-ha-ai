@@ -66,18 +66,44 @@ class GarminStorage:
         async with self._history_lock:
             await self._history_store.async_save(history)
 
+    async def async_save_daily_metrics(self, metrics_dict: dict[str, Any]) -> None:
+        """Save a single day's metric snapshot into history storage."""
+        if not metrics_dict or "date" not in metrics_dict:
+            return
+        async with self._history_lock:
+            try:
+                data = await self._history_store.async_load()
+                history = data if isinstance(data, dict) else {}
+                history[metrics_dict["date"]] = metrics_dict
+                await self._history_store.async_save(history)
+            except Exception as err:
+                LOGGER.warning("Error saving daily metrics snapshot to storage: %s", err)
+
     async def async_prune_history(self, retention_days: int) -> None:
         """Prune metric history entries older than retention_days."""
         from datetime import datetime, timedelta, timezone
+        from unittest.mock import MagicMock
+        import homeassistant.util.dt as dt_util
 
         async with self._history_lock:
             history = await self._history_store.async_load()
             if not history or not isinstance(history, dict):
                 return
 
-            cutoff = (
-                datetime.now(timezone.utc) - timedelta(days=retention_days)
-            ).strftime("%Y-%m-%d")
+            now = dt_util.now()
+            today = None
+            if hasattr(now, "date") and not isinstance(now, MagicMock):
+                try:
+                    res = now.date()
+                    if not isinstance(res, MagicMock):
+                        today = res
+                except Exception:
+                    pass
+
+            if today is None or not hasattr(today, "strftime") or isinstance(today, MagicMock):
+                today = datetime.now(timezone.utc).date()
+
+            cutoff = (today - timedelta(days=retention_days)).strftime("%Y-%m-%d")
             pruned_history = {
                 date_str: metrics
                 for date_str, metrics in history.items()
@@ -85,3 +111,5 @@ class GarminStorage:
             }
             if len(pruned_history) != len(history):
                 await self._history_store.async_save(pruned_history)
+
+

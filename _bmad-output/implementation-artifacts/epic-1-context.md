@@ -41,3 +41,16 @@ User can configure the `garmin-ha-ai` integration via Home Assistant UI Config F
 - Story 1.3 (`garmin_client.py`) is required by Story 1.4 (`config_flow.py`) and Story 1.5/1.6 (`coordinator.py`).
 - Story 1.5 (`GarminDailyMetrics`) is required by Story 1.6 (`coordinator.py`).
 - Story 1.6 (`coordinator.py`) is required by Story 1.7 (`sensor.py`).
+
+### Review Findings
+
+- [x] [Review][Patch] Implement `GarminStorage.async_save_daily_metrics` to merge daily snapshots into historical store [`custom_components/garmin_ha_ai/storage.py:80`]
+- [x] [Review][Patch] Allow `GarminConnectMfaRequired` and `GarminConnectConnectionError` to propagate in `GarminClient.async_login_with_credentials` [`custom_components/garmin_ha_ai/garmin_client.py:82`]
+- [x] [Review][Patch] Re-raise connection and authentication exceptions in `GarminClient._fetch_sync` instead of swallowing into null metrics [`custom_components/garmin_ha_ai/garmin_client.py:134`]
+- [x] [Review][Patch] Add MFA challenge handling in `config_flow.py` `async_step_reauth_confirm` [`custom_components/garmin_ha_ai/config_flow.py:149`]
+- [x] [Review][Patch] Add `SensorStateClass`, `SensorDeviceClass`, and `device_info` to `GarminSensorEntity` [`custom_components/garmin_ha_ai/sensor.py:25`]
+- [x] [Review][Patch] Guard `metrics.activities is None` in steps sensor attributes [`custom_components/garmin_ha_ai/sensor.py:118`]
+- [x] [Review][Patch] Add automated history retention pruning during coordinator polling cycle [`custom_components/garmin_ha_ai/coordinator.py:60`]
+- [x] [Review][Patch] Add test coverage for reauth flow, partial metric payloads, and component setup/unload lifecycle [`tests/test_config_flow.py:140`]
+
+

@@ -37,6 +37,11 @@ if "garminconnect" not in sys.modules:
     sys.modules["garminconnect"] = gc_mock
 
 import pytest
+from garminconnect import (
+    GarminConnectAuthenticationError,
+    GarminConnectConnectionError,
+    GarminConnectMfaRequired,
+)
 
 from custom_components.garmin_ha_ai.garmin_client import GarminClient
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -256,6 +261,87 @@ def test_async_fetch_daily_metrics() -> None:
         assert metrics.weight_kg == 75.5
         assert len(metrics.activities) == 1
         assert metrics.activities[0]["name"] == "Morning Run"
+
+    asyncio.run(run())
+
+
+def test_async_fetch_daily_metrics_partial_payload() -> None:
+    """Test async_fetch_daily_metrics safely handles missing/null endpoint data."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_garmin_inst = MagicMock()
+        client_adapter.client = mock_garmin_inst
+
+        # Empty payloads
+        mock_garmin_inst.get_user_summary.return_value = {}
+        mock_garmin_inst.get_sleep_data.return_value = {}
+        mock_garmin_inst.get_hrv_data.return_value = {}
+        mock_garmin_inst.get_activities_by_date.return_value = []
+
+        metrics = await client_adapter.async_fetch_daily_metrics("2026-08-16")
+
+        assert metrics.date == "2026-08-16"
+        assert metrics.steps is None
+        assert metrics.sleep_score is None
+        assert metrics.hrv_status is None
+        assert metrics.activities == []
+
+    asyncio.run(run())
+
+
+def test_async_fetch_daily_metrics_connection_error() -> None:
+    """Test async_fetch_daily_metrics raises GarminConnectConnectionError on connection loss."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_garmin_inst = MagicMock()
+        client_adapter.client = mock_garmin_inst
+
+        mock_garmin_inst.get_user_summary.side_effect = GarminConnectConnectionError("Unreachable")
+
+        with pytest.raises(GarminConnectConnectionError):
+            await client_adapter.async_fetch_daily_metrics("2026-08-16")
+
+    asyncio.run(run())
+
+
+def test_async_login_with_credentials_mfa_propagation() -> None:
+    """Test async_login_with_credentials allows GarminConnectMfaRequired to bubble up."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
+            mock_garmin_inst = MagicMock()
+            mock_garmin_inst.login.side_effect = GarminConnectMfaRequired()
+            mock_garmin_cls.return_value = mock_garmin_inst
+
+            with pytest.raises(GarminConnectMfaRequired):
+                await client_adapter.async_login_with_credentials("user@example.com", "pass")
 
     asyncio.run(run())
 

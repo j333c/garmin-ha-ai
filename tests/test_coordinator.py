@@ -29,6 +29,7 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
     mock_client.async_fetch_daily_metrics = AsyncMock(return_value=sample_metrics)
     mock_storage.async_save_daily_metrics = AsyncMock()
+    mock_storage.async_prune_history = AsyncMock()
 
     coordinator = GarminDataUpdateCoordinator(
         hass, mock_entry, mock_client, mock_storage
@@ -39,6 +40,7 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     assert metrics is sample_metrics
     mock_client.async_fetch_daily_metrics.assert_called()
     mock_storage.async_save_daily_metrics.assert_called_once_with(sample_metrics.to_dict())
+    mock_storage.async_prune_history.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -180,9 +182,10 @@ async def test_coordinator_dispatch_notification_targets(hass: HomeAssistant) ->
         model_used="gemini-2.0-flash",
     )
 
-    with patch(
-        "homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock
+    with patch.object(
+        coordinator.hass.services, "async_call", new_callable=AsyncMock
     ) as mock_async_call:
+
         # 1. Empty target (disabled)
         mock_entry.data = {CONF_NOTIFICATION_TARGETS: ""}
         mock_entry.options = {}

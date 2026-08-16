@@ -174,3 +174,28 @@ def test_prune_history(mock_hass: MagicMock) -> None:
         assert "2026-08-15" in history_data
 
     asyncio.run(run())
+
+
+def test_save_daily_metrics(mock_hass: MagicMock) -> None:
+    """Test saving single daily metric snapshot via async_save_daily_metrics."""
+
+    async def run() -> None:
+        storage = GarminStorage(mock_hass)
+        stored_data: dict = {}
+
+        async def mock_save(data: dict) -> None:
+            nonlocal stored_data
+            stored_data = data
+
+        async def mock_load() -> dict | None:
+            return stored_data
+
+        storage._history_store.async_save = AsyncMock(side_effect=mock_save)
+        storage._history_store.async_load = AsyncMock(side_effect=mock_load)
+
+        metric_snapshot = {"date": "2026-08-16", "steps": 10500, "sleep_score": 90}
+        await storage.async_save_daily_metrics(metric_snapshot)
+        assert stored_data.get("2026-08-16") == metric_snapshot
+
+    asyncio.run(run())
+

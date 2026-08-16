@@ -31,7 +31,9 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         super().__init__()
         if config_entry is not None:
+            self.config_entry = config_entry
             self.handler = config_entry.entry_id
+
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

@@ -102,8 +102,8 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             mfa_code = user_input[CONF_MFA_CODE].strip()
-            username = self._user_data[CONF_GARMIN_USERNAME]
-            password = self._user_data[CONF_GARMIN_PASSWORD]
+            username = self._user_data.get(CONF_GARMIN_USERNAME, "")
+            password = self._user_data.get(CONF_GARMIN_PASSWORD, "")
 
             storage = GarminStorage(self.hass)
             client = GarminClient(self.hass, storage)
@@ -112,6 +112,11 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await client.async_login_with_credentials(
                     username, password, mfa_code=mfa_code
                 )
+                if self._reauth_entry:
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
+                    )
+                    return self.async_abort(reason="reauth_successful")
                 return self._create_garmin_entry()
             except (ConfigEntryAuthFailed, GarminConnectAuthenticationError):
                 errors["base"] = "invalid_mfa"
@@ -155,8 +160,16 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
                 )
                 return self.async_abort(reason="reauth_successful")
-            except ConfigEntryAuthFailed:
+            except GarminConnectMfaRequired:
+                self._user_data = {
+                    CONF_GARMIN_USERNAME: username,
+                    CONF_GARMIN_PASSWORD: password,
+                }
+                return await self.async_step_mfa()
+            except (ConfigEntryAuthFailed, GarminConnectAuthenticationError):
                 errors["base"] = "invalid_auth"
+            except GarminConnectConnectionError:
+                errors["base"] = "cannot_connect"
             except Exception:  # pylint: disable=broad-except
                 errors["base"] = "unknown"
 

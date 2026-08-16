@@ -9,9 +9,11 @@ from garminconnect import (
     Garmin,
     GarminConnectAuthenticationError,
     GarminConnectConnectionError,
+    GarminConnectMfaRequired,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+import homeassistant.util.dt as dt_util
 
 from .const import LOGGER
 from .models import GarminDailyMetrics
@@ -79,6 +81,8 @@ class GarminClient:
             self.client = await self.hass.async_add_executor_job(_credential_login)
             LOGGER.info("Successfully authenticated with Garmin Connect")
             return await self._async_save_current_tokens()
+        except (GarminConnectMfaRequired, GarminConnectConnectionError):
+            raise
         except GarminConnectAuthenticationError as err:
             LOGGER.warning("Garmin authentication failed")
             raise ConfigEntryAuthFailed("Invalid Garmin credentials") from err
@@ -121,7 +125,10 @@ class GarminClient:
         elif isinstance(target_date, str):
             date_str = target_date
         else:
-            date_str = date.today().isoformat()
+            try:
+                date_str = dt_util.now().date().isoformat()
+            except Exception:
+                date_str = date.today().isoformat()
 
         client = await self.async_get_client()
 
@@ -129,6 +136,8 @@ class GarminClient:
             summary_data: dict[str, Any] = {}
             try:
                 summary_data = client.get_user_summary(date_str) or {}
+            except (GarminConnectAuthenticationError, GarminConnectConnectionError):
+                raise
             except Exception as err:
                 LOGGER.warning("Could not fetch user summary for %s: %s", date_str, err)
 
@@ -140,6 +149,8 @@ class GarminClient:
                 overall = scores.get("overall", {})
                 if isinstance(overall, dict):
                     sleep_score = overall.get("value")
+            except GarminConnectAuthenticationError:
+                raise
             except Exception as err:
                 LOGGER.debug("Could not fetch sleep data for %s: %s", date_str, err)
 
@@ -149,6 +160,8 @@ class GarminClient:
                 summary = hrv_data.get("hrvSummary", {})
                 if isinstance(summary, dict):
                     hrv_status = summary.get("status")
+            except GarminConnectAuthenticationError:
+                raise
             except Exception as err:
                 LOGGER.debug("Could not fetch HRV data for %s: %s", date_str, err)
 
@@ -169,6 +182,8 @@ class GarminClient:
                         "distance_m": act.get("distance"),
                         "calories": act.get("calories"),
                     })
+            except GarminConnectAuthenticationError:
+                raise
             except Exception as err:
                 LOGGER.debug("Could not fetch activities for %s: %s", date_str, err)
 
@@ -205,4 +220,9 @@ class GarminClient:
                 activities=activities,
             )
 
-        return await self.hass.async_add_executor_job(_fetch_sync)
+        try:
+            return await self.hass.async_add_executor_job(_fetch_sync)
+        except GarminConnectAuthenticationError as err:
+            LOGGER.warning("Garmin Connect authentication failed during metric fetch: %s", err)
+            raise ConfigEntryAuthFailed("Garmin OAuth session expired") from err
+

@@ -4,11 +4,14 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -16,40 +19,58 @@ from .const import DOMAIN
 from .coordinator import GarminDataUpdateCoordinator
 from .models import GarminDailyMetrics
 
+
+def _get_device_info(entry: ConfigEntry) -> DeviceInfo:
+    """Return standard DeviceInfo for Garmin HA AI entities."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=f"Garmin AI ({entry.title})",
+        manufacturer="Garmin HA AI",
+        model="Garmin Connect Health AI Integration",
+    )
+
+
 SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key="steps",
         name="Garmin Steps",
         native_unit_of_measurement="steps",
+        state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:walk",
     ),
     SensorEntityDescription(
         key="resting_hr",
         name="Garmin Resting Heart Rate",
         native_unit_of_measurement="bpm",
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:heart-pulse",
     ),
     SensorEntityDescription(
         key="sleep_score",
         name="Garmin Sleep Score",
         native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:sleep",
     ),
     SensorEntityDescription(
         key="avg_stress",
         name="Garmin Stress Level",
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:emoticon-neutral-outline",
     ),
     SensorEntityDescription(
         key="weight_kg",
         name="Garmin Weight",
         native_unit_of_measurement="kg",
+        device_class=SensorDeviceClass.WEIGHT,
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:scale-bathroom",
     ),
     SensorEntityDescription(
         key="body_battery_min",
         name="Garmin Body Battery",
         native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-charging",
     ),
 )
@@ -88,6 +109,7 @@ class GarminSensorEntity(CoordinatorEntity[GarminDataUpdateCoordinator], SensorE
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_name = description.name
+        self._attr_device_info = _get_device_info(entry)
 
     @property
     def native_value(self) -> Any:
@@ -116,7 +138,7 @@ class GarminSensorEntity(CoordinatorEntity[GarminDataUpdateCoordinator], SensorE
             return {
                 "distance_km": metrics.distance_km,
                 "total_calories": metrics.total_calories,
-                "activities_count": len(metrics.activities),
+                "activities_count": len(metrics.activities) if metrics.activities else 0,
             }
 
         return {}
@@ -138,6 +160,7 @@ class GarminAIHealthReportShortSensor(
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_ai_health_report_short"
         self._attr_name = "Garmin AI Health Report Short"
+        self._attr_device_info = _get_device_info(entry)
 
     @property
     def native_value(self) -> str | None:
@@ -186,6 +209,7 @@ class GarminAIHealthReportLongSensor(
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_ai_health_report_long"
         self._attr_name = "Garmin AI Health Report Long"
+        self._attr_device_info = _get_device_info(entry)
 
     @property
     def native_value(self) -> str | None:
@@ -229,6 +253,8 @@ class GarminAILastAnswerSensor(
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_ai_last_answer"
         self._attr_name = "Garmin AI Last Answer"
+        self._attr_device_info = _get_device_info(entry)
+
 
     @property
     def native_value(self) -> str | None:

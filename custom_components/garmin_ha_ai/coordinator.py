@@ -36,8 +36,10 @@ from .const import (
     CONF_COACHING_DIRECTIVES,
     CONF_FITNESS_GOALS,
     CONF_NOTIFICATION_TARGETS,
+    CONF_RETENTION_DAYS,
     DEFAULT_AI_PROVIDER,
     DEFAULT_POLLING_INTERVAL_HOURS,
+    DEFAULT_RETENTION_DAYS,
     DOMAIN,
     LOGGER,
 )
@@ -186,6 +188,11 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         try:
             metrics = await self.client.async_fetch_daily_metrics()
             await self.storage.async_save_daily_metrics(metrics.to_dict())
+
+            options = {**self.entry.data, **self.entry.options}
+            retention_days = int(options.get(CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS))
+            await self.storage.async_prune_history(retention_days)
+
             LOGGER.debug(
                 "Successfully polled Garmin metrics for date %s: %s steps",
                 metrics.date,
