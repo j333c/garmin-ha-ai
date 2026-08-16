@@ -22,6 +22,30 @@ from .base import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _format_gemini_error(err: Exception) -> tuple[int | None, str]:
+    """Extract HTTP status code and clean human-readable error description from Gemini API error."""
+    code = getattr(err, "code", None) or getattr(err, "status_code", None)
+    raw_message = getattr(err, "message", None) or str(err)
+    if isinstance(raw_message, dict):
+        raw_message = str(raw_message.get("message") or raw_message)
+    else:
+        raw_message = str(raw_message)
+
+    lower_msg = raw_message.lower()
+    if code == 503 or "503" in raw_message or "unavailable" in lower_msg or "high demand" in lower_msg:
+        if "high demand" in lower_msg:
+            return 503, f"Gemini model is currently experiencing high demand (503 Service Unavailable). Please try again in a few moments: {raw_message}"
+        return 503, f"Gemini service unavailable (503): {raw_message}"
+    if code == 429 or "resource_exhausted" in lower_msg or "quota" in lower_msg or "rate limit" in lower_msg:
+        return 429, f"Gemini API quota or rate limit exceeded (429): {raw_message}"
+    if code == 404 or "not_found" in lower_msg or "no longer available" in lower_msg or "not found" in lower_msg:
+        return 404, f"Gemini model not found (404): {raw_message}"
+    if code in (401, 403) or "api_key_invalid" in lower_msg or "unauthorized" in lower_msg or "permission_denied" in lower_msg:
+        return code, f"Gemini API authentication failed ({code}): {raw_message}"
+
+    return code, raw_message
+
+
 class GeminiProvider(BaseAIProvider):
     """Google Gemini AI Engine Provider using official google-genai SDK."""
 
@@ -83,15 +107,14 @@ class GeminiProvider(BaseAIProvider):
                     raise AIEngineError("Gemini API returned empty response text")
                 return response.text
             except genai_errors.APIError as err:
-                code = getattr(err, "code", None) or getattr(err, "status_code", None)
-                message = str(err)
-                if code == 429 or "RESOURCE_EXHAUSTED" in message or "quota" in message.lower():
-                    raise AIEngineQuotaError(f"Gemini API quota exceeded: {message}") from err
-                if code in (400, 401, 403, 404) or "NOT_FOUND" in message or "not found" in message.lower() or "no longer available" in message.lower() or "INVALID_ARGUMENT" in message:
-                    raise AIEngineClientError(f"Gemini API client error ({code}): {message}") from err
-                if code in (500, 502, 503, 504) or "503" in message or "500" in message:
-                    raise AIEngineError(f"Gemini API server error ({code}): {message}") from err
-                raise AIEngineError(f"Gemini API error: {message}") from err
+                code, clean_msg = _format_gemini_error(err)
+                if code == 429 or "RESOURCE_EXHAUSTED" in clean_msg or "quota" in clean_msg.lower():
+                    raise AIEngineQuotaError(f"Gemini API quota exceeded: {clean_msg}") from err
+                if code in (400, 401, 403, 404) or "NOT_FOUND" in clean_msg or "not found" in clean_msg.lower() or "no longer available" in clean_msg.lower() or "INVALID_ARGUMENT" in clean_msg:
+                    raise AIEngineClientError(f"Gemini API client error ({code}): {clean_msg}") from err
+                if code in (500, 502, 503, 504) or "503" in clean_msg or "500" in clean_msg:
+                    raise AIEngineError(f"Gemini API server error ({code}): {clean_msg}") from err
+                raise AIEngineError(f"Gemini API error: {clean_msg}") from err
             except (TimeoutError, asyncio.TimeoutError) as err:
                 raise AIEngineTimeoutError("Gemini API request timed out") from err
             except Exception as err:

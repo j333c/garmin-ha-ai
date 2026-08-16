@@ -131,6 +131,13 @@ def test_ai_health_report_sensors() -> None:
     assert long_sensor.extra_state_attributes["full_report"] == full_markdown_report
     assert long_sensor.extra_state_attributes["model_used"] == "gemini-2.0-flash"
 
+    # Case 3: Error state tracking
+    mock_coordinator.latest_error = "Gemini model is currently experiencing high demand (503 Service Unavailable)."
+    mock_coordinator.last_error_time = "2026-08-16T13:30:00Z"
+    assert "last_error" in long_sensor.extra_state_attributes
+    assert "503" in long_sensor.extra_state_attributes["last_error"]
+    assert long_sensor.extra_state_attributes["last_error_time"] == "2026-08-16T13:30:00Z"
+
 
 def test_garmin_ai_last_answer_sensor() -> None:
     """Test GarminAILastAnswerSensor initialization, truncation, and extra attributes."""
@@ -161,6 +168,14 @@ def test_garmin_ai_last_answer_sensor() -> None:
     assert answer_sensor.extra_state_attributes["full_answer"] == very_long_answer
     assert answer_sensor.extra_state_attributes["question"] == "Should I train hard today?"
     assert answer_sensor.extra_state_attributes["timestamp"] == "2026-08-15T22:00:00Z"
+
+    # Case 3: Error state tracking
+    mock_coordinator.latest_error = "AI Engine error: quota exceeded"
+    mock_coordinator.last_error_time = "2026-08-16T14:00:00Z"
+    assert "last_error" in answer_sensor.extra_state_attributes
+    assert answer_sensor.extra_state_attributes["last_error"] == "AI Engine error: quota exceeded"
+    assert answer_sensor.extra_state_attributes["last_error_time"] == "2026-08-16T14:00:00Z"
+
 
 
 def test_garmin_ai_last_update_sensor() -> None:

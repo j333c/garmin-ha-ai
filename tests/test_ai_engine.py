@@ -105,6 +105,36 @@ async def test_gemini_provider_quota_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gemini_provider_503_high_demand_error() -> None:
+    """Test GeminiProvider maps API 503 high demand error to AIEngineError and retries."""
+    from google.genai import errors as genai_errors
+
+    with patch("custom_components.garmin_ha_ai.ai_engine.gemini.genai.Client") as mock_client_cls, patch(
+        "asyncio.sleep", new_callable=AsyncMock
+    ):
+        mock_client = MagicMock()
+        mock_aio_models = MagicMock()
+
+        api_error = genai_errors.APIError(
+            503,
+            "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+            None,
+        )
+        mock_aio_models.generate_content = AsyncMock(side_effect=api_error)
+        mock_client.aio.models = mock_aio_models
+        mock_client_cls.return_value = mock_client
+
+        provider = GeminiProvider(api_key="fake_key")
+        with pytest.raises(AIEngineError) as exc_info:
+            await provider.async_generate_response("Test prompt")
+
+        assert "503" in str(exc_info.value)
+        assert "high demand" in str(exc_info.value).lower()
+        # Retries: 1 initial call + 2 retries = 3 calls total
+        assert mock_aio_models.generate_content.call_count == 3
+
+
+@pytest.mark.asyncio
 async def test_gemini_provider_404_client_error_no_retry() -> None:
     """Test GeminiProvider maps API 404 error to AIEngineClientError and fails immediately without retry."""
     from custom_components.garmin_ha_ai.ai_engine.base import AIEngineClientError

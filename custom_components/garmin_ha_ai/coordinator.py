@@ -72,7 +72,9 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.storage = storage
         self.latest_report: AIHealthReport | None = None
         self.latest_answer: dict[str, Any] | None = None
+        self.latest_error: str | None = None
         self.last_update_time: datetime | None = None
+        self.last_error_time: datetime | None = None
         self._is_generating: bool = False
         self.question_input: str = ""
         self.report_display_mode: str = REPORT_VIEW_SHORT
@@ -179,6 +181,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             )
 
             self.latest_report = report
+            self.latest_error = None
             self.last_update_time = dt_util.now()
             self.async_update_listeners()
             LOGGER.info("Successfully generated AI health report using provider %s", provider_type)
@@ -186,9 +189,15 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             await self.async_dispatch_notification(report)
             return report
         except AIEngineError as err:
+            self.latest_error = str(err)
+            self.last_error_time = dt_util.now()
+            self.async_update_listeners()
             LOGGER.error("AI Engine error during report generation: %s", err)
             return None
         except Exception as err:
+            self.latest_error = str(err)
+            self.last_error_time = dt_util.now()
+            self.async_update_listeners()
             LOGGER.exception("Unexpected error during AI report generation: %s", err)
             return None
         finally:
@@ -257,12 +266,19 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 hass=self.hass,
             )
             answer_text = await provider.async_generate_response(prompt)
+            self.latest_error = None
             await self.async_set_latest_answer(target_question, answer_text)
             return answer_text
         except AIEngineError as err:
+            self.latest_error = str(err)
+            self.last_error_time = dt_util.now()
+            self.async_update_listeners()
             LOGGER.error("AI Engine error during Q&A call: %s", err)
             raise HomeAssistantError(f"AI Engine error: {err}") from err
         except Exception as err:
+            self.latest_error = str(err)
+            self.last_error_time = dt_util.now()
+            self.async_update_listeners()
             LOGGER.exception("Unexpected error during Q&A execution: %s", err)
             raise HomeAssistantError(f"Q&A execution failed: {err}") from err
 

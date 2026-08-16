@@ -233,17 +233,30 @@ class GarminAIHealthReportLongSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return full Markdown report in extra state attributes."""
+        attrs: dict[str, Any] = {}
+        latest_error = getattr(self.coordinator, "latest_error", None)
+        if isinstance(latest_error, str) and latest_error:
+            attrs["last_error"] = latest_error
+            err_time = getattr(self.coordinator, "last_error_time", None)
+            if isinstance(err_time, datetime):
+                attrs["last_error_time"] = err_time.isoformat()
+            elif isinstance(err_time, str) and err_time:
+                attrs["last_error_time"] = err_time
+
         report = self.coordinator.latest_report
         if not report:
-            return {}
+            return attrs
 
-        return {
-            "full_report": report.full_report,
-            "short_summary": report.short_summary,
-            "timestamp": report.timestamp,
-            "provider_used": report.provider_used,
-            "model_used": report.model_used,
-        }
+        attrs.update(
+            {
+                "full_report": report.full_report,
+                "short_summary": report.short_summary,
+                "timestamp": report.timestamp,
+                "provider_used": report.provider_used,
+                "model_used": report.model_used,
+            }
+        )
+        return attrs
 
 
 class GarminAILastAnswerSensor(
@@ -285,15 +298,28 @@ class GarminAILastAnswerSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes including full Markdown answer and question."""
+        attrs: dict[str, Any] = {}
+        latest_error = getattr(self.coordinator, "latest_error", None)
+        if isinstance(latest_error, str) and latest_error:
+            attrs["last_error"] = latest_error
+            err_time = getattr(self.coordinator, "last_error_time", None)
+            if isinstance(err_time, datetime):
+                attrs["last_error_time"] = err_time.isoformat()
+            elif isinstance(err_time, str) and err_time:
+                attrs["last_error_time"] = err_time
+
         latest = self.coordinator.latest_answer
         if not latest:
-            return {}
+            return attrs
 
-        return {
-            "full_answer": latest.get("answer", ""),
-            "question": latest.get("question", ""),
-            "timestamp": latest.get("timestamp", ""),
-        }
+        attrs.update(
+            {
+                "full_answer": latest.get("answer", ""),
+                "question": latest.get("question", ""),
+                "timestamp": latest.get("timestamp", ""),
+            }
+        )
+        return attrs
 
 
 class GarminAILastUpdateSensor(

@@ -28,6 +28,16 @@ async def test_frontend_js_file_exists_and_contains_custom_cards():
     assert "Garmin AI Health Report" in content
     assert "Garmin AI Health Overview" in content
 
+    # Check error banner UI definitions
+    assert "garmin-error-banner" in content
+    assert "garmin-error-text" in content
+    assert "garmin-error-close" in content
+
+    # Check safe linear markdown parsing (no catastrophic backtracking regex)
+    assert "renderMarkdown" in content
+    assert "ulMatch" in content
+    assert "olMatch" in content
+
 
 async def test_async_setup_frontend_registers_static_path_and_extra_js(hass):
     """Verify that async_setup_frontend properly registers static paths and extra js URL."""

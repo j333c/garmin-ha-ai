@@ -64,12 +64,16 @@ async def async_with_retry(
             attempt += 1
             if attempt > max_retries:
                 raise err
+            err_msg = str(err).split("\n")[0]
+            if len(err_msg) > 100:
+                err_msg = err_msg[:97] + "..."
             _LOGGER.warning(
-                "AI engine request transient error (attempt %d/%d), retrying in %.1fs: %s",
+                "AI engine request transient error (attempt %d/%d), retrying in %.1fs: %s (%s)",
                 attempt,
                 max_retries + 1,
                 delay,
                 type(err).__name__,
+                err_msg,
             )
             await asyncio.sleep(delay)
             delay *= backoff_factor

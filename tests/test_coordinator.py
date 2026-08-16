@@ -356,3 +356,44 @@ async def test_coordinator_async_ask_question_errors(hass: HomeAssistant) -> Non
         await coordinator.async_ask_question("Any tips?")
 
 
+@pytest.mark.asyncio
+async def test_coordinator_error_tracking_on_ai_failure(hass: HomeAssistant) -> None:
+    """Test coordinator tracks latest_error on AI failures and clears it on success."""
+    from custom_components.garmin_ha_ai.ai_engine.base import AIEngineError
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(
+        side_effect=AIEngineError("Gemini model is currently experiencing high demand (503 Service Unavailable).")
+    )
+
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ):
+        # Q&A failure sets latest_error
+        with pytest.raises(HomeAssistantError, match="high demand"):
+            await coordinator.async_ask_question("Will I recover?")
+        assert coordinator.latest_error is not None
+        assert "high demand" in coordinator.latest_error
+        assert coordinator.last_error_time is not None
+
+        # Successful call clears latest_error
+        mock_provider.async_generate_response = AsyncMock(return_value="Yes, you will recover well.")
+        await coordinator.async_ask_question("Will I recover?")
+        assert coordinator.latest_error is None
+
+
+
