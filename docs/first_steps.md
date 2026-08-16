@@ -162,6 +162,8 @@ action:
 
 * [Installation Guide](installation.md)
 * [Lovelace Dashboard Guide](dashboard_cards.md)
+* [Troubleshooting Guide](troubleshooting.md)
+* [Frequently Asked Questions (FAQ)](faq.md)
 * [GitHub Issues](https://github.com/j333c/garmin-ha-ai/issues)
 
 ---

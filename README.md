@@ -4,7 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.5.0--rc1-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
+[![Release](https://img.shields.io/badge/Release-v0.5.0--rc2-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
 
 A privacy-first, subscription-free **Home Assistant custom integration** that pulls your daily health and performance metrics from **Garmin Connect** and delivers personalized, context-aware AI coaching briefings and interactive health intelligence.
 
@@ -37,6 +37,9 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 
 * [**Installation Guide**](docs/installation.md) — Detailed HACS and manual installation steps.
 * [**First Steps & Configuration**](docs/first_steps.md) — Initial setup, AI provider selection, and dashboard setup.
+* [**Lovelace Dashboard Guide**](docs/dashboard_cards.md) — Dashboard cards, interactive Q&A setups, and full YAML examples.
+* [**Troubleshooting Guide**](docs/troubleshooting.md) — Diagnosing Garmin MFA, rate limits (429), local AI connectivity, and logs.
+* [**Frequently Asked Questions (FAQ)**](docs/faq.md) — Common questions, architecture details, and local model guidance.
 
 ---
 
@@ -218,6 +221,10 @@ Click **Configure** on the integration card under **Settings → Devices & Servi
 
 ## ❓ Frequently Asked Questions & Troubleshooting
 
+For in-depth guides, see:
+* 📖 [**Frequently Asked Questions (FAQ)**](docs/faq.md)
+* 🛠️ [**Troubleshooting Guide**](docs/troubleshooting.md)
+
 <details>
 <summary><strong>How do I handle MFA / Two-Factor Authentication?</strong></summary>
 
@@ -227,7 +234,7 @@ When setting up or re-authenticating, if your Garmin account has MFA enabled, th
 <details>
 <summary><strong>Can I use a completely local AI model (Ollama / LocalAI / LM Studio)?</strong></summary>
 
-Yes! In the Options Flow, select `openai` as the provider, specify your model name (e.g., `llama3.3:70b` or `mistral`), enter any dummy API key (e.g. `ollama`), and set **Custom AI Base URL** to your local endpoint (e.g., `http://192.168.1.100:11434/v1`).
+Yes! In the Options Flow, select `openai` as the provider, specify your model name (e.g., `llama3.3:70b` or `mistral`), enter any dummy API key (e.g. `ollama`), and set **Custom AI Base URL** to your local endpoint (e.g., `http://192.168.1.100:11434/v1`). Plain HTTP on local networks is fully supported without SSL certificates.
 </details>
 
 <details>

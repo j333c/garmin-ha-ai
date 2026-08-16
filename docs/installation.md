@@ -87,11 +87,12 @@ If you do not use HACS or prefer manual installation:
 
 ## Verifying the Installation
 
-After Home Assistant restarts:
+## Next Steps & Documentation
 
-1. Go to **Settings** → **System** → **Logs**.
-2. Filter for `garmin_ha_ai` or verify there are no startup errors. Home Assistant will automatically install required Python dependencies (`garminconnect`, `google-genai`, `httpx`) on first startup.
-3. Proceed to the [First Steps Guide](first_steps.md) to set up and configure your integration.
+* [First Steps & Getting Started](first_steps.md) — Initial configuration, goal setting, and provider options.
+* [Lovelace Dashboard Guide](dashboard_cards.md) — Card picker, overview cards, and Lovelace YAML examples.
+* [Troubleshooting Guide](troubleshooting.md) — Solutions for MFA, 429 rate limits, local AI setups, and logs.
+* [Frequently Asked Questions (FAQ)](faq.md) — Architecture, privacy, supported models, and common questions.
 
 ---
 
