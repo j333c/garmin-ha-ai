@@ -44,7 +44,7 @@ development_status:
   1-5-garmin-metric-data-ingestion-normalization: done
   1-6-dataupdatecoordinator-scheduled-polling-engine-coordinator-p: done
   1-7-native-garmin-metric-sensor-entities-sensor-py: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: done
   2-1-pluggable-ai-engine-drivers-gemini-sdk-generic-openai-httpx: done
@@ -52,10 +52,10 @@ development_status:
   2-3-ai-health-report-sensor-entities-255-char-protection-sensor: done
   2-4-scheduled-report-orchestration-debounced-trigger-service-coo: done
   2-5-multi-channel-fault-tolerant-notification-dispatch: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-interactive-q-a-service-registration-history-grounding-servi: done
   3-2-last-answer-sensor-entity-interactive-lovelace-q-a-card-patt: done
   3-3-ui-options-flow-retention-window-management-options_flow-py: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
