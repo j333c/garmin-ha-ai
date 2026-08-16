@@ -25,6 +25,7 @@ import homeassistant.util.dt as dt_util
 
 from .ai_engine import (
     AIEngineError,
+    assemble_qa_prompt,
     assemble_report_prompt,
     get_ai_provider,
     parse_ai_health_report,
@@ -43,6 +44,8 @@ from .const import (
     DEFAULT_RETENTION_DAYS,
     DOMAIN,
     LOGGER,
+    REPORT_VIEW_OPTIONS,
+    REPORT_VIEW_SHORT,
 )
 from .garmin_client import (
     GarminClient,
@@ -71,6 +74,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.latest_answer: dict[str, Any] | None = None
         self.last_update_time: datetime | None = None
         self._is_generating: bool = False
+        self.question_input: str = ""
+        self.report_display_mode: str = REPORT_VIEW_SHORT
 
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 
@@ -188,6 +193,78 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             return None
         finally:
             self._is_generating = False
+
+    def set_question_input(self, value: str) -> None:
+        """Set the question input string."""
+        self.question_input = value
+        self.async_update_listeners()
+
+    async def async_set_question_input(self, value: str) -> None:
+        """Set the question input string asynchronously."""
+        self.set_question_input(value)
+
+    def set_report_display_mode(self, mode: str) -> None:
+        """Set the report display mode string."""
+        if mode in REPORT_VIEW_OPTIONS:
+            self.report_display_mode = mode
+            self.async_update_listeners()
+
+    async def async_set_report_display_mode(self, mode: str) -> None:
+        """Set the report display mode string asynchronously."""
+        self.set_report_display_mode(mode)
+
+    async def async_ask_question(
+        self, question: str | None = None, days_history: int = 7
+    ) -> str:
+        """Ask a question to AI provider using rolling metrics history."""
+        target_question = (question or self.question_input or "").strip()
+        if not target_question:
+            raise HomeAssistantError("Question cannot be empty.")
+
+        options = {**self.entry.data, **self.entry.options}
+        provider_type = options.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
+        api_key = options.get(CONF_AI_API_KEY, "")
+        model = options.get(CONF_AI_MODEL)
+        base_url = options.get(CONF_AI_BASE_URL)
+        goals = options.get(CONF_FITNESS_GOALS)
+        directives = options.get(CONF_COACHING_DIRECTIVES)
+
+        if not api_key:
+            raise HomeAssistantError("AI API key is not configured.")
+
+        history_dict = await self.storage.async_load_history()
+        history_list = []
+        if isinstance(history_dict, dict) and history_dict:
+            sorted_dates = sorted(history_dict.keys())
+            clamped_days = max(1, min(days_history, 90))
+            available_days = min(clamped_days, len(sorted_dates))
+            recent_dates = sorted_dates[-available_days:] if available_days > 0 else []
+            history_list = [history_dict[d] for d in recent_dates]
+
+        prompt = assemble_qa_prompt(
+            question=target_question,
+            history=history_list,
+            user_goals=goals,
+            coaching_directives=directives,
+        )
+
+        try:
+            provider = get_ai_provider(
+                provider_type=provider_type,
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+                hass=self.hass,
+            )
+            answer_text = await provider.async_generate_response(prompt)
+            await self.async_set_latest_answer(target_question, answer_text)
+            return answer_text
+        except AIEngineError as err:
+            LOGGER.error("AI Engine error during Q&A call: %s", err)
+            raise HomeAssistantError(f"AI Engine error: {err}") from err
+        except Exception as err:
+            LOGGER.exception("Unexpected error during Q&A execution: %s", err)
+            raise HomeAssistantError(f"Q&A execution failed: {err}") from err
 
     async def async_set_latest_answer(self, question: str, answer: str) -> None:
         """Update the latest Q&A response and notify listeners."""

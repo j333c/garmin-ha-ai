@@ -14,19 +14,7 @@ from homeassistant.core import (
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
 
-from .ai_engine import (
-    AIEngineError,
-    assemble_qa_prompt,
-    get_ai_provider,
-)
 from .const import (
-    CONF_AI_API_KEY,
-    CONF_AI_BASE_URL,
-    CONF_AI_MODEL,
-    CONF_AI_PROVIDER,
-    CONF_COACHING_DIRECTIVES,
-    CONF_FITNESS_GOALS,
-    DEFAULT_AI_PROVIDER,
     DOMAIN,
     LOGGER,
     SERVICE_ASK_QUESTION,
@@ -75,72 +63,35 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         storage: GarminStorage = entry_data["storage"]
         coordinator = entry_data["coordinator"]
-        entry = coordinator.entry
 
-        options = {**entry.data, **entry.options}
-        provider_type = options.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
-        api_key = options.get(CONF_AI_API_KEY, "")
-        model = options.get(CONF_AI_MODEL)
-        base_url = options.get(CONF_AI_BASE_URL)
-        goals = options.get(CONF_FITNESS_GOALS)
-        directives = options.get(CONF_COACHING_DIRECTIVES)
-
-        if not api_key:
-            raise HomeAssistantError("AI API key is not configured.")
-
-        # Load local metric history from storage
+        # Calculate context_days for response payload
         history_dict = await storage.async_load_history()
-        history_list = []
+        context_days = 0
         if isinstance(history_dict, dict) and history_dict:
-            sorted_dates = sorted(history_dict.keys())
-            # Clamp days_history (range 1..90)
             clamped_days = max(1, min(days_history, 90))
-            available_days = min(clamped_days, len(sorted_dates))
-            recent_dates = sorted_dates[-available_days:] if available_days > 0 else []
-            history_list = [history_dict[d] for d in recent_dates]
+            context_days = min(clamped_days, len(history_dict))
 
-        prompt = assemble_qa_prompt(
-            question=question,
-            history=history_list,
-            user_goals=goals,
-            coaching_directives=directives,
+        answer_text = await coordinator.async_ask_question(
+            question=question, days_history=days_history
         )
 
         response_entity = call.data.get("response_entity")
-
-        try:
-            provider = get_ai_provider(
-                provider_type=provider_type,
-                api_key=api_key,
-                model=model,
-                base_url=base_url,
-                hass=hass,
+        if response_entity:
+            short_val = answer_text[:247] + "..." if len(answer_text) > 250 else answer_text
+            hass.states.async_set(
+                response_entity,
+                short_val,
+                {
+                    "full_answer": answer_text,
+                    "question": question,
+                    "context_days": context_days,
+                },
             )
-            answer_text = await provider.async_generate_response(prompt)
-            await coordinator.async_set_latest_answer(question, answer_text)
-
-            if response_entity:
-                short_val = answer_text[:247] + "..." if len(answer_text) > 250 else answer_text
-                hass.states.async_set(
-                    response_entity,
-                    short_val,
-                    {
-                        "full_answer": answer_text,
-                        "question": question,
-                        "context_days": len(history_list),
-                    },
-                )
-        except AIEngineError as err:
-            LOGGER.error("AI Engine error during Q&A call: %s", err)
-            raise HomeAssistantError(f"AI Engine error: {err}") from err
-        except Exception as err:
-            LOGGER.exception("Unexpected error during Q&A execution: %s", err)
-            raise HomeAssistantError(f"Q&A execution failed: {err}") from err
 
         return {
             "answer": answer_text,
             "question": question,
-            "context_days": len(history_list),
+            "context_days": context_days,
         }
 
     if not hass.services.has_service(DOMAIN, SERVICE_GENERATE_REPORT):

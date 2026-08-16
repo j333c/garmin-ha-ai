@@ -261,3 +261,98 @@ async def test_coordinator_rate_limit_fallback(hass: HomeAssistant) -> None:
     assert metrics is cached_metrics
     assert coordinator.data.steps == 8500
 
+
+@pytest.mark.asyncio
+async def test_coordinator_question_and_report_view_state(hass: HomeAssistant) -> None:
+    """Test setting question input and report display mode on coordinator."""
+    from custom_components.garmin_ha_ai.const import REPORT_VIEW_LONG, REPORT_VIEW_SHORT
+
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    coordinator.async_update_listeners = MagicMock()
+
+    # Question input
+    coordinator.set_question_input("What workouts should I do?")
+    assert coordinator.question_input == "What workouts should I do?"
+    coordinator.async_update_listeners.assert_called_once()
+
+    await coordinator.async_set_question_input("Updated question?")
+    assert coordinator.question_input == "Updated question?"
+
+    # Report display mode
+    coordinator.set_report_display_mode(REPORT_VIEW_LONG)
+    assert coordinator.report_display_mode == REPORT_VIEW_LONG
+
+    # Invalid mode is ignored
+    coordinator.set_report_display_mode("InvalidMode")
+    assert coordinator.report_display_mode == REPORT_VIEW_LONG
+
+    await coordinator.async_set_report_display_mode(REPORT_VIEW_SHORT)
+    assert coordinator.report_display_mode == REPORT_VIEW_SHORT
+
+
+@pytest.mark.asyncio
+async def test_coordinator_async_ask_question_success(hass: HomeAssistant) -> None:
+    """Test coordinator async_ask_question invokes AI provider and stores latest answer."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(
+        return_value={"2026-08-15": {"steps": 10000}}
+    )
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(return_value="Take a rest day.")
+
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ):
+        answer = await coordinator.async_ask_question("Should I run?")
+
+    assert answer == "Take a rest day."
+    assert coordinator.latest_answer["question"] == "Should I run?"
+    assert coordinator.latest_answer["answer"] == "Take a rest day."
+
+
+@pytest.mark.asyncio
+async def test_coordinator_async_ask_question_errors(hass: HomeAssistant) -> None:
+    """Test coordinator async_ask_question validation errors."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    # Empty question
+    with pytest.raises(HomeAssistantError, match="Question cannot be empty"):
+        await coordinator.async_ask_question("")
+
+    # Missing API key
+    mock_entry.data[CONF_AI_API_KEY] = ""
+    with pytest.raises(HomeAssistantError, match="AI API key is not configured"):
+        await coordinator.async_ask_question("Any tips?")
+
+

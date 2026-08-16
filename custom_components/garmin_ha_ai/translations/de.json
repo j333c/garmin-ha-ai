@@ -62,6 +62,24 @@
     "button": {
       "generate_report": {
         "name": "AI-Gesundheitsbericht generieren"
+      },
+      "ask_question": {
+        "name": "AI-Frage senden"
+      }
+    },
+    "text": {
+      "question_input": {
+        "name": "Garmin AI Frage"
+      }
+    },
+    "select": {
+      "report_display_mode": {
+        "name": "Garmin AI Berichtsansicht",
+        "state": {
+          "Short Summary": "Kurzübersicht",
+          "Long Report": "Ausführlicher Bericht",
+          "Latest Q&A Answer": "Letzte Q&A-Antwort"
+        }
       }
     }
   }

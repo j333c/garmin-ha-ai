@@ -11,7 +11,22 @@ LOGGER: logging.Logger = logging.getLogger(__package__)
 DOMAIN: Final[str] = "garmin_ha_ai"
 DEFAULT_NAME: Final[str] = "Garmin HA AI"
 
-PLATFORMS: Final[list[Platform]] = [Platform.SENSOR, Platform.BUTTON]
+PLATFORMS: Final[list[Platform]] = [
+    Platform.SENSOR,
+    Platform.BUTTON,
+    Platform.TEXT,
+    Platform.SELECT,
+]
+
+# Report View / Display Mode Options
+REPORT_VIEW_SHORT: Final[str] = "Short Summary"
+REPORT_VIEW_LONG: Final[str] = "Long Report"
+REPORT_VIEW_QA: Final[str] = "Latest Q&A Answer"
+REPORT_VIEW_OPTIONS: Final[list[str]] = [
+    REPORT_VIEW_SHORT,
+    REPORT_VIEW_LONG,
+    REPORT_VIEW_QA,
+]
 
 # Configuration Keys - Garmin Credentials
 CONF_GARMIN_USERNAME: Final[str] = "username"

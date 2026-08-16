@@ -122,6 +122,16 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
                     async_setup_entry as button_setup_entry,
                 )
                 await button_setup_entry(hass, entry, mock_add_entities)
+            elif str(platform) == "text" or str(platform).endswith("text"):
+                from custom_components.garmin_ha_ai.text import (
+                    async_setup_entry as text_setup_entry,
+                )
+                await text_setup_entry(hass, entry, mock_add_entities)
+            elif str(platform) == "select" or str(platform).endswith("select"):
+                from custom_components.garmin_ha_ai.select import (
+                    async_setup_entry as select_setup_entry,
+                )
+                await select_setup_entry(hass, entry, mock_add_entities)
         return True
 
     hass.config_entries.async_forward_entry_setups = AsyncMock(
@@ -174,10 +184,10 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         assert coordinator.data == mock_metrics
         mock_save_history.assert_called_once_with(mock_metrics.to_dict())
 
-        # Verify all 10 sensor entities and 1 button entity were created and attached
-        assert len(registered_entities) == 11
-        sensor_entities = [e for e in registered_entities if not hasattr(e, "async_press")]
-        assert len(sensor_entities) == 10
+        # Verify 11 sensor entities + 2 button entities + 1 text + 1 select = 15 total
+        assert len(registered_entities) == 15
+        sensor_entities = [e for e in registered_entities if getattr(e, "entity_description", None) or "Sensor" in e.__class__.__name__]
+        assert len(sensor_entities) == 11
         
         # Verify steps sensor
         steps_sensor = next(e for e in registered_entities if getattr(e, "entity_description", None) and e.entity_description.key == "steps")

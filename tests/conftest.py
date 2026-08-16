@@ -152,6 +152,8 @@ if "homeassistant" not in sys.modules:
     class MockPlatform(StrEnum):
         SENSOR = "sensor"
         BUTTON = "button"
+        TEXT = "text"
+        SELECT = "select"
 
     ha_mock.Platform = MockPlatform
 
@@ -180,9 +182,58 @@ if "homeassistant" not in sys.modules:
     button_mock.ButtonEntity = MockButtonEntity
     components_mock.button = button_mock
 
+    class MockTextMode(StrEnum):
+        TEXT = "text"
+        PASSWORD = "password"
+
+    class MockTextEntity:
+        def __init__(self):
+            pass
+
+        @property
+        def unique_id(self):
+            return getattr(self, "_attr_unique_id", None)
+
+        @property
+        def name(self):
+            return getattr(self, "_attr_name", None)
+
+        async def async_set_value(self, value: str):
+            pass
+
+    text_mock = MagicMock()
+    text_mock.TextEntity = MockTextEntity
+    text_mock.TextMode = MockTextMode
+    components_mock.text = text_mock
+
+    class MockSelectEntity:
+        def __init__(self):
+            pass
+
+        @property
+        def unique_id(self):
+            return getattr(self, "_attr_unique_id", None)
+
+        @property
+        def name(self):
+            return getattr(self, "_attr_name", None)
+
+        @property
+        def options(self):
+            return getattr(self, "_attr_options", [])
+
+        async def async_select_option(self, option: str):
+            pass
+
+    select_mock = MagicMock()
+    select_mock.SelectEntity = MockSelectEntity
+    components_mock.select = select_mock
+
     sys.modules["homeassistant.components"] = components_mock
     sys.modules["homeassistant.components.sensor"] = sensor_mock
     sys.modules["homeassistant.components.button"] = button_mock
+    sys.modules["homeassistant.components.text"] = text_mock
+    sys.modules["homeassistant.components.select"] = select_mock
     ha_mock.components = components_mock
 
     class MockDeviceInfo(dict):

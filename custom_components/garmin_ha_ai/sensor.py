@@ -17,7 +17,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import homeassistant.util.dt as dt_util
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    REPORT_VIEW_LONG,
+    REPORT_VIEW_QA,
+    REPORT_VIEW_SHORT,
+)
 from .coordinator import GarminDataUpdateCoordinator
 from .models import GarminDailyMetrics
 
@@ -94,6 +99,7 @@ async def async_setup_entry(
     entities.append(GarminAIHealthReportLongSensor(coordinator, entry))
     entities.append(GarminAILastAnswerSensor(coordinator, entry))
     entities.append(GarminAILastUpdateSensor(coordinator, entry))
+    entities.append(GarminAISelectedReportSensor(coordinator, entry))
 
     async_add_entities(entities)
 
@@ -325,6 +331,70 @@ class GarminAILastUpdateSensor(
             except Exception:
                 return None
         return val
+
+
+class GarminAISelectedReportSensor(
+    CoordinatorEntity[GarminDataUpdateCoordinator], SensorEntity
+):
+    """Dynamic sensor providing report or answer text according to currently selected display mode."""
+
+    _attr_icon = "mdi:text-box-search-outline"
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize dynamic selected report sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ai_selected_report"
+        self._attr_name = "Garmin AI Selected Report"
+        self._attr_device_info = _get_device_info(entry)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the current display mode name as native state."""
+        return self.coordinator.report_display_mode
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return dynamically rendered content matching the selected mode in extra state attributes."""
+        mode = self.coordinator.report_display_mode
+        report = self.coordinator.latest_report
+        answer = self.coordinator.latest_answer
+
+        report_text = ""
+        timestamp = None
+
+        if mode == REPORT_VIEW_SHORT:
+            if report and report.short_summary:
+                report_text = report.short_summary
+                timestamp = report.timestamp
+            else:
+                report_text = "No report generated yet."
+        elif mode == REPORT_VIEW_LONG:
+            if report and report.full_report:
+                report_text = report.full_report
+                timestamp = report.timestamp
+            else:
+                report_text = "No report generated yet."
+        elif mode == REPORT_VIEW_QA:
+            if answer and answer.get("answer"):
+                q = answer.get("question", "")
+                a = answer.get("answer", "")
+                report_text = f"**Question:** {q}\n\n**Answer:** {a}"
+                timestamp = answer.get("timestamp")
+            else:
+                report_text = "No question asked yet."
+        else:
+            report_text = report.short_summary if report else "No report generated yet."
+
+        return {
+            "report_text": report_text,
+            "display_mode": mode,
+            "timestamp": timestamp,
+        }
+
 
 
 

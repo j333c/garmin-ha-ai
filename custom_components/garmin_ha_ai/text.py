@@ -1,0 +1,61 @@
+"""Text platform for Garmin HA AI integration."""
+from __future__ import annotations
+
+from homeassistant.components.text import TextEntity, TextMode
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import DOMAIN
+from .coordinator import GarminDataUpdateCoordinator
+
+
+def _get_device_info(entry: ConfigEntry) -> DeviceInfo:
+    """Return standard DeviceInfo for Garmin HA AI entities."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=f"Garmin AI ({entry.title})",
+        manufacturer="Garmin HA AI",
+        model="Garmin Connect Health AI Integration",
+    )
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Garmin HA AI text entities from a config entry."""
+    coordinator: GarminDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    async_add_entities([GarminAIQuestionTextEntity(coordinator, entry)])
+
+
+class GarminAIQuestionTextEntity(
+    CoordinatorEntity[GarminDataUpdateCoordinator], TextEntity
+):
+    """Text entity allowing the user to type questions for the AI coach."""
+
+    _attr_icon = "mdi:chat-question-outline"
+    _attr_mode = TextMode.TEXT
+
+    def __init__(
+        self,
+        coordinator: GarminDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_question_input"
+        self._attr_name = "Garmin AI Question"
+        self._attr_device_info = _get_device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        """Return the current text value."""
+        return self.coordinator.question_input
+
+    async def async_set_value(self, value: str) -> None:
+        """Set the text value."""
+        self.coordinator.set_question_input(value)

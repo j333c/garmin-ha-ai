@@ -75,12 +75,21 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 | `sensor.garmin_ai_health_report_long` | AI Health Report (Long) | `text` | Status overview with full multi-section Markdown report in attributes. |
 | `sensor.garmin_ai_last_answer` | AI Last Answer | `text` | Truncated response to the last interactive Q&A question asked. |
 | `sensor.garmin_ai_last_update` | Garmin AI Last Update | `timestamp` | Datetime timestamp of the last successful Garmin sync. |
+| `sensor.garmin_ai_selected_report` | AI Selected Report | `text` | Dynamically outputs the full content for whichever view is selected. |
+
+### Text & Select Entities
+
+| Entity ID | Name | Description |
+| :--- | :--- | :--- |
+| `text.garmin_ai_question` | Garmin AI Question | Direct dashboard text input field for typing questions to the AI Coach. |
+| `select.garmin_ai_report_view` | Garmin AI Report View | Dropdown to switch between *Short Summary*, *Long Report*, and *Latest Q&A Answer*. |
 
 ### Button Entities
 
 | Entity ID | Name | Description |
 | :--- | :--- | :--- |
 | `button.garmin_ai_generate_report` | Generate AI Health Report | Triggers on-demand Garmin data extraction and AI briefing generation. |
+| `button.garmin_ai_ask_question` | Ask AI Question | Submits the question currently typed in `text.garmin_ai_question` to the AI coach. |
 
 ---
 
@@ -114,17 +123,33 @@ data:
 
 ## 🎨 Lovelace Dashboard Examples
 
-### 1. Daily AI Coach Briefing Card
+### 1. Interactive Resizable Health Coach & Report Card (Recommended)
+
+Includes interactive question typing, one-click submission, view switcher dropdown, and a **resizable text field** with a draggable bottom-right handle:
 
 ```yaml
-type: markdown
-title: 🤖 AI Health Coach Briefing
-content: >
-  **Summary:** {{ states('sensor.garmin_ai_health_report_short') }}
+type: vertical-stack
+title: 🤖 Garmin AI Health Coach
+cards:
+  - type: entities
+    entities:
+      - entity: text.garmin_ai_question
+        name: Coaching Question
+      - entity: button.garmin_ai_ask_question
+        name: Send Question
+      - entity: select.garmin_ai_report_view
+        name: Active View
+      - entity: button.garmin_ai_generate_report
+        name: Refresh Daily Report
 
-  ---
+  - type: markdown
+    title: 📋 Coach Briefing & Responses
+    content: >
+      <div style="resize: vertical; overflow: auto; min-height: 140px; max-height: 650px; padding: 12px; border: 1px solid var(--divider-color); border-radius: 8px;">
 
-  {{ state_attr('sensor.garmin_ai_health_report_long', 'full_report') }}
+      {{ state_attr('sensor.garmin_ai_selected_report', 'report_text') }}
+
+      </div>
 ```
 
 ### 2. Metric Glance Card

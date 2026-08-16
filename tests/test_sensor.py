@@ -4,12 +4,18 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
+from custom_components.garmin_ha_ai.const import (
+    REPORT_VIEW_LONG,
+    REPORT_VIEW_QA,
+    REPORT_VIEW_SHORT,
+)
 from custom_components.garmin_ha_ai.models import AIHealthReport, GarminDailyMetrics
 from custom_components.garmin_ha_ai.sensor import (
     SENSOR_DESCRIPTIONS,
     GarminAIHealthReportLongSensor,
     GarminAIHealthReportShortSensor,
     GarminAILastAnswerSensor,
+    GarminAISelectedReportSensor,
     GarminSensorEntity,
     async_setup_entry,
 )
@@ -33,9 +39,9 @@ def test_sensor_setup_entry() -> None:
 
         await async_setup_entry(mock_hass, mock_entry, add_entities)
 
-        # 6 metric sensors + 2 report sensors + 1 last answer sensor + 1 last update sensor = 10 total
-        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 4
-        assert len(added_entities) == 10
+        # 6 metric sensors + 2 report sensors + 1 last answer sensor + 1 last update sensor + 1 selected report sensor = 11 total
+        assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 5
+        assert len(added_entities) == 11
 
     asyncio.run(run())
 
@@ -182,6 +188,63 @@ def test_garmin_ai_last_update_sensor() -> None:
     parsed_dt = sensor.native_value
     assert isinstance(parsed_dt, datetime)
     assert parsed_dt.year == 2026
+
+
+def test_garmin_ai_selected_report_sensor() -> None:
+    """Test GarminAISelectedReportSensor dynamically returns content matching the selected mode."""
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_coordinator = MagicMock()
+
+    sample_report = AIHealthReport(
+        timestamp="2026-08-16T08:00:00Z",
+        short_summary="Short summary: Recovery is strong today.",
+        full_report="# Full Report\n\n- Sleep: Great\n- Stress: Low",
+        provider_used="gemini",
+        model_used="gemini-2.0-flash",
+    )
+    mock_coordinator.latest_report = sample_report
+    mock_coordinator.latest_answer = {
+        "question": "Can I do intervals today?",
+        "answer": "Yes, your readiness is optimal.",
+        "timestamp": "2026-08-16T08:30:00Z",
+    }
+
+    sensor = GarminAISelectedReportSensor(mock_coordinator, mock_entry)
+
+    # 1. Mode: Short Summary
+    mock_coordinator.report_display_mode = REPORT_VIEW_SHORT
+    assert sensor.native_value == REPORT_VIEW_SHORT
+    assert sensor.extra_state_attributes["report_text"] == "Short summary: Recovery is strong today."
+    assert sensor.extra_state_attributes["display_mode"] == REPORT_VIEW_SHORT
+    assert sensor.extra_state_attributes["timestamp"] == "2026-08-16T08:00:00Z"
+
+    # 2. Mode: Long Report
+    mock_coordinator.report_display_mode = REPORT_VIEW_LONG
+    assert sensor.native_value == REPORT_VIEW_LONG
+    assert sensor.extra_state_attributes["report_text"] == "# Full Report\n\n- Sleep: Great\n- Stress: Low"
+    assert sensor.extra_state_attributes["display_mode"] == REPORT_VIEW_LONG
+
+    # 3. Mode: Latest Q&A Answer
+    mock_coordinator.report_display_mode = REPORT_VIEW_QA
+    assert sensor.native_value == REPORT_VIEW_QA
+    assert "Can I do intervals today?" in sensor.extra_state_attributes["report_text"]
+    assert "Yes, your readiness is optimal." in sensor.extra_state_attributes["report_text"]
+    assert sensor.extra_state_attributes["timestamp"] == "2026-08-16T08:30:00Z"
+
+    # 4. Fallback when report or answer is empty
+    mock_coordinator.latest_report = None
+    mock_coordinator.latest_answer = None
+
+    mock_coordinator.report_display_mode = REPORT_VIEW_SHORT
+    assert sensor.extra_state_attributes["report_text"] == "No report generated yet."
+
+    mock_coordinator.report_display_mode = REPORT_VIEW_LONG
+    assert sensor.extra_state_attributes["report_text"] == "No report generated yet."
+
+    mock_coordinator.report_display_mode = REPORT_VIEW_QA
+    assert sensor.extra_state_attributes["report_text"] == "No question asked yet."
+
 
 
 
