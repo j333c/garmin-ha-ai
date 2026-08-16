@@ -30,11 +30,8 @@ async def test_frontend_js_file_exists_and_contains_custom_cards():
     assert "garmin-ha-ai-report-card-editor" in content
     assert "garmin-ha-ai-overview-card-editor" in content
 
-    # Check window.customCards card picker registration with required 'custom:' prefix
+    # Check window.customCards card picker registration
     assert "window.customCards" in content
-    assert "custom:garmin-ha-ai-qa-card" in content
-    assert "custom:garmin-ha-ai-report-card" in content
-    assert "custom:garmin-ha-ai-overview-card" in content
     assert "Garmin AI Coach Q&A" in content
     assert "Garmin AI Health Report" in content
     assert "Garmin AI Health Overview" in content

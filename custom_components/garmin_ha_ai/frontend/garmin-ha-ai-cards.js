@@ -1404,36 +1404,38 @@
 
   const cardsToRegister = [
     {
-      type: "custom:garmin-ha-ai-qa-card",
+      type: "garmin-ha-ai-qa-card",
       name: "Garmin AI Coach Q&A",
       description: "Interactive Q&A text field, ask button, and live formatted coach answer view.",
-      preview: true,
       documentationURL: "https://github.com/j333c/garmin-ha-ai",
     },
     {
-      type: "custom:garmin-ha-ai-report-card",
+      type: "garmin-ha-ai-report-card",
       name: "Garmin AI Health Report",
       description: "Detailed AI health and recovery report with on-demand refresh and formatted Markdown view.",
-      preview: true,
       documentationURL: "https://github.com/j333c/garmin-ha-ai",
     },
     {
-      type: "custom:garmin-ha-ai-overview-card",
+      type: "garmin-ha-ai-overview-card",
       name: "Garmin AI Health Overview",
       description: "Complete Garmin recovery glance metrics, daily coaching focus, interactive Q&A, and full reports.",
-      preview: true,
       documentationURL: "https://github.com/j333c/garmin-ha-ai",
     },
   ];
 
   for (const card of cardsToRegister) {
-    if (!window.customCards.some((c) => c.type === card.type)) {
+    const existingIdx = window.customCards.findIndex(
+      (c) => c.type === card.type || c.type === `custom:${card.type}`
+    );
+    if (existingIdx >= 0) {
+      window.customCards[existingIdx] = card;
+    } else {
       window.customCards.push(card);
     }
   }
 
   console.info(
-    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded ",
+    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.1.4) ",
     "color: white; background: #03a9f4; font-weight: 700; border-radius: 3px 0 0 3px;",
     "color: #03a9f4; background: rgba(3, 169, 244, 0.1); font-weight: 700; border-radius: 0 3px 3px 0;"
   );
