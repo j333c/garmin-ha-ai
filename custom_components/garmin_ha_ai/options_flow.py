@@ -75,7 +75,7 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
             retention_days = user_input.get(
                 CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
             )
-            storage = GarminStorage(self.hass)
+            storage = GarminStorage(self.hass, entry_id=self._entry.entry_id)
             try:
                 # Prune history immediately if retention period is reduced
                 await storage.async_prune_history(retention_days)

@@ -11,6 +11,7 @@ from homeassistant.helpers.storage import Store
 import homeassistant.util.dt as dt_util
 
 from .const import (
+    DOMAIN,
     LOGGER,
     STORAGE_KEY_HISTORY,
     STORAGE_KEY_TOKENS,
@@ -23,30 +24,51 @@ class GarminStorage:
 
     Uses Home Assistant's built-in Store helper (homeassistant.helpers.storage.Store)
     to perform atomic, safe JSON reads/writes in the .storage directory.
+    Supports multi-account storage partitioning per config entry ID.
     Employs asyncio locks to prevent race conditions during concurrent coordinator access.
     """
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str | None = None) -> None:
         """Initialize storage helper with HA Store instances and locks."""
+        self.entry_id = entry_id
+
+        token_key = f"{DOMAIN}_tokens_{entry_id}.json" if entry_id else STORAGE_KEY_TOKENS
+        history_key = f"{DOMAIN}_history_{entry_id}.json" if entry_id else STORAGE_KEY_HISTORY
+
         # Separate storage stores for sensitive OAuth tokens and metrics history
         self._token_store: Store[dict[str, Any]] = Store(
-            hass, STORAGE_VERSION, STORAGE_KEY_TOKENS, private=True
+            hass, STORAGE_VERSION, token_key, private=True
         )
         self._history_store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, history_key
+        )
+
+        # Legacy stores for backward-compatibility migration if entry-specific file doesn't exist yet
+        self._legacy_token_store: Store[dict[str, Any]] = Store(
+            hass, STORAGE_VERSION, STORAGE_KEY_TOKENS, private=True
+        )
+        self._legacy_history_store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, STORAGE_KEY_HISTORY
         )
+
         # Concurrency locks guaranteeing single-writer consistency
         self._token_lock = asyncio.Lock()
         self._history_lock = asyncio.Lock()
 
     async def async_load_tokens(self) -> dict[str, Any]:
-        """Load OAuth tokens from local storage.
+        """Load OAuth tokens from local storage with legacy migration fallback.
 
         Returns empty dict if storage file does not exist.
         """
         async with self._token_lock:
             try:
                 data = await self._token_store.async_load()
+                if (data is None or not data) and self.entry_id:
+                    # Check legacy store for backward compatibility
+                    legacy = await self._legacy_token_store.async_load()
+                    if legacy:
+                        await self._token_store.async_save(legacy)
+                        return legacy
                 return data if data is not None else {}
             except Exception as err:
                 LOGGER.warning("Error loading Garmin OAuth tokens from storage: %s", err)
@@ -58,13 +80,18 @@ class GarminStorage:
             await self._token_store.async_save(tokens)
 
     async def async_load_history(self) -> dict[str, Any]:
-        """Load daily metric history snapshots from local storage.
+        """Load daily metric history snapshots from local storage with legacy migration fallback.
 
         Returns empty dict if storage file does not exist.
         """
         async with self._history_lock:
             try:
                 data = await self._history_store.async_load()
+                if (data is None or not data) and self.entry_id:
+                    legacy = await self._legacy_history_store.async_load()
+                    if legacy:
+                        await self._history_store.async_save(legacy)
+                        return legacy
                 return data if data is not None else {}
             except Exception as err:
                 LOGGER.warning("Error loading Garmin metric history from storage: %s", err)
@@ -163,4 +190,3 @@ class GarminStorage:
                 await self._history_store.async_save(pruned_history)
             except Exception as err:
                 LOGGER.warning("Error during atomic save-and-prune of metrics history: %s", err)
-

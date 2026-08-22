@@ -23,7 +23,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     Invoked whenever the user modifies settings via the integration Options flow.
     """
-    storage = GarminStorage(hass)
+    storage = GarminStorage(hass, entry_id=entry.entry_id)
     retention_days = entry.options.get(
         CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
     )
@@ -51,8 +51,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     await async_setup_frontend(hass)
 
-    # 1. Instantiate persistence, API client, and update coordinator
-    storage = GarminStorage(hass)
+    # 1. Instantiate persistence, API client, and update coordinator with isolated entry storage
+    storage = GarminStorage(hass, entry_id=entry.entry_id)
     client = GarminClient(hass, storage)
     coordinator = GarminDataUpdateCoordinator(hass, entry, client, storage)
 

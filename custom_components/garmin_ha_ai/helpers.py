@@ -16,11 +16,16 @@ def get_device_info(entry: ConfigEntry) -> DeviceInfo:
     """Return standard Home Assistant DeviceInfo for Garmin HA AI entities.
 
     This binds all entities (sensors, buttons, text inputs, selects) created by
-    the integration under a single unified Device in the Home Assistant Device Registry.
+    the integration under a dedicated per-user Device in the Home Assistant Device Registry.
     """
+    username = ""
+    if hasattr(entry, "data") and isinstance(entry.data, dict):
+        username = entry.data.get("username", "")
+    device_name = f"Garmin AI ({username or entry.title})"
+
     return DeviceInfo(
         identifiers={(DOMAIN, entry.entry_id)},
-        name=f"Garmin AI ({entry.title})",
+        name=device_name,
         manufacturer="Garmin HA AI",
         model="Garmin Connect Health AI Integration",
     )

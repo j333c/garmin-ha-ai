@@ -79,10 +79,10 @@ development_status:
   6-3-dual-mode-polling-engine-daily-fixed-time-vs-periodic-inter: done
   epic-6-retrospective: done
 
-  epic-7: backlog
-  7-1-multi-entry-storage-and-credential-isolation: backlog
-  7-2-per-user-device-and-entity-scope-with-custom-personas: backlog
-  epic-7-retrospective: optional
+  epic-7: done
+  7-1-multi-entry-storage-and-credential-isolation: done
+  7-2-per-user-device-and-entity-scope-with-custom-personas: done
+  epic-7-retrospective: done
 
   epic-8: backlog
   8-1-packaged-custom-lovelace-card-with-gauges-and-qa-chat-draw: backlog
