@@ -1,5 +1,5 @@
 <!-- bmad:context -->
-<!-- Verified 2026-08-16 against 7ba7e56. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
+<!-- Verified 2026-08-22 against deb462d. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
 
 ## garmin-ha-ai
 
@@ -14,20 +14,23 @@ Home Assistant custom component integration for Garmin Connect health data and A
 
 - Component lifecycle & services: `custom_components/garmin_ha_ai/__init__.py`, `services.py`, `services.yaml`
 - Configuration & options flows: `custom_components/garmin_ha_ai/config_flow.py`, `options_flow.py`
-- Polling coordinator & sensors: `custom_components/garmin_ha_ai/coordinator.py`, `sensor.py`
+- Polling coordinator & entities: `custom_components/garmin_ha_ai/coordinator.py`, `sensor.py`, `button.py`, `select.py`, `text.py`
+- Analytics & baseline trends: `custom_components/garmin_ha_ai/analytics.py`
+- Frontend Lovelace cards: `custom_components/garmin_ha_ai/frontend.py`, `frontend/garmin-ha-ai-cards.js`
 - AI Engine drivers & prompt assembler: `custom_components/garmin_ha_ai/ai_engine/`
 - Local storage & Garmin adapter: `custom_components/garmin_ha_ai/storage.py`, `garmin_client.py`
+- Exception taxonomy & models: `custom_components/garmin_ha_ai/exceptions.py`, `models.py`
 - Unit, contract & E2E tests: `tests/` (`tests/api/`, `tests/e2e/`)
 
 ## Running and verifying
 
-- Run `pytest` to execute all 93 unit, API contract, and E2E lifecycle tests.
+- Run `pytest` to execute all 161 unit, API contract, and E2E lifecycle tests.
 
 ## Conventions that differ from defaults
 
 - Store long AI response narratives in entity extra state attributes; Home Assistant entity state strings strictly truncate after 255 characters (enforce <=250 chars).
 - Access local storage via Home Assistant `Store` helper (`homeassistant.helpers.storage.Store`); never perform raw file I/O directly.
-- Ground AI context in local rolling history (`garmin_ha_ai_history.json`) via `GarminStorage` rather than making repeated cloud requests to Garmin Connect.
+- Ground AI context in local rolling history partitioned per config entry (`GarminStorage`) rather than making repeated cloud requests to Garmin Connect.
 
 ## Known pitfalls
 
