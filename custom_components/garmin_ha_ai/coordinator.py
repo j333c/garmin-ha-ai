@@ -71,7 +71,11 @@ def calculate_coordinator_interval(entry: ConfigEntry) -> timedelta:
     options = {**entry.data, **entry.options}
     mode = options.get(CONF_POLLING_MODE, DEFAULT_POLLING_MODE)
     if mode == POLLING_MODE_INTERVAL:
-        interval_hours = int(options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL_HOURS))
+        try:
+            val = options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL_HOURS)
+            interval_hours = int(val) if val is not None else DEFAULT_POLLING_INTERVAL_HOURS
+        except (ValueError, TypeError):
+            interval_hours = DEFAULT_POLLING_INTERVAL_HOURS
         return timedelta(hours=max(1, interval_hours))
     return timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 
@@ -107,6 +111,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self._is_generating: bool = False
         self.question_input: str = ""
         self.report_display_mode: str = REPORT_VIEW_SHORT
+        self._unsub_schedule = None
 
         # Schedule polling interval dynamically based on options
         update_interval = calculate_coordinator_interval(entry)
@@ -117,6 +122,45 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             name=DOMAIN,
             update_interval=update_interval,
         )
+
+        options = {**entry.data, **entry.options}
+        if options.get(CONF_POLLING_MODE, DEFAULT_POLLING_MODE) != POLLING_MODE_INTERVAL:
+            self._setup_daily_schedule()
+
+    def _setup_daily_schedule(self) -> None:
+        """Register daily fixed time trigger if configured."""
+        try:
+            from homeassistant.helpers.event import async_track_time_change
+        except Exception:
+            return
+
+        options = {**self.entry.data, **self.entry.options}
+        sched = str(options.get(CONF_POLLING_SCHEDULE, "06:00:00") or "06:00:00")
+        try:
+            parts = [int(p) for p in sched.split(":") if p.strip()]
+            hour = parts[0] if len(parts) > 0 else 6
+            minute = parts[1] if len(parts) > 1 else 0
+            second = parts[2] if len(parts) > 2 else 0
+        except (ValueError, TypeError, IndexError):
+            hour, minute, second = 6, 0, 0
+
+        async def _scheduled_update(_now: datetime) -> None:
+            LOGGER.debug("Triggering daily scheduled sync at %02d:%02d:%02d", hour, minute, second)
+            await self.async_request_refresh()
+
+        try:
+            self._unsub_schedule = async_track_time_change(
+                self.hass, _scheduled_update, hour=hour, minute=minute, second=second
+            )
+        except Exception as err:
+            LOGGER.debug("Could not register time change tracker: %s", err)
+
+    async def async_shutdown(self) -> None:
+        """Clean up background listeners."""
+        if self._unsub_schedule:
+            self._unsub_schedule()
+            self._unsub_schedule = None
+        await super().async_shutdown()
 
     async def async_dispatch_notification(self, report: AIHealthReport) -> None:
         """Dispatch generated AI health report to configured notification targets with fault tolerance.

@@ -109,6 +109,11 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
             if te_parts:
                 act_details.append(", ".join(te_parts))
 
+            if act.get("hr_zones") and isinstance(act["hr_zones"], dict):
+                zones_summary = [f"{k}: {v}" for k, v in act["hr_zones"].items() if v]
+                if zones_summary:
+                    act_details.append(f"HR Zones: [{', '.join(zones_summary[:5])}]")
+
             lines.append(f"  * {act_type}: {', '.join(act_details)}")
     else:
         lines.append("- Logged Activities: None")
@@ -220,6 +225,29 @@ def parse_ai_health_report(
     )
 
 
+def _extract_goals_from_text(goals_text: str | None) -> tuple[int | None, int | None]:
+    """Extract step goal and sleep target if present in freeform goals text."""
+    if not goals_text:
+        return None, None
+    import re
+    text = str(goals_text)
+    step_goal = None
+    sleep_target = None
+    step_match = re.search(r'(\d{4,6})\s*steps?', text, re.IGNORECASE)
+    if step_match:
+        try:
+            step_goal = int(step_match.group(1))
+        except (ValueError, TypeError):
+            pass
+    sleep_match = re.search(r'sleep(?:\s+(?:score|target|quality))?\s*(?:of|:)?\s*(\d{1,3})', text, re.IGNORECASE)
+    if sleep_match:
+        try:
+            sleep_target = int(sleep_match.group(1))
+        except (ValueError, TypeError):
+            pass
+    return step_goal, sleep_target
+
+
 def assemble_report_prompt(
     current_metrics: GarminDailyMetrics | None,
     history: list[GarminDailyMetrics | dict[str, Any]] | None = None,
@@ -227,11 +255,11 @@ def assemble_report_prompt(
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
 ) -> str:
-    """Assemble 5-block prompt context payload for daily AI report generation.
+    """Assemble 5-block prompt payload for daily AI Health Briefing generation.
 
-    Block 1: Current Day Metrics (Steps, HR, Sleep, Stress, HRV, Body Battery, Activities)
-    Block 2: Historical Trends & Pre-Computed Analytics Baselines (7-day rolling context)
-    Block 3: User Goals & Profile (Customizable)
+    Block 1: Current Day Metrics (Factual snapshot)
+    Block 2: Historical Trends & Pre-computed Baselines (Rolling statistical window)
+    Block 3: User Goals & Profile (Customizable targets)
     Block 4: Persona Directives & Tone (Customizable)
     Block 5: Structural Output Formatting Rules (Summary tags and markdown headings)
     """
@@ -243,9 +271,12 @@ def assemble_report_prompt(
     block2_chronological, _ = truncate_history_context(history_list, max_chars=max_history_chars)
 
     # Calculate deterministic baseline analytics
+    step_goal, sleep_target = _extract_goals_from_text(user_goals)
     analytics_data = calculate_baseline_analytics(
         current_metrics=current_metrics,
         history=history_list,
+        step_goal=step_goal,
+        sleep_target=sleep_target,
     )
     block2_analytics = format_baseline_analytics_block(analytics_data)
 
@@ -310,9 +341,12 @@ def assemble_qa_prompt(
 
     # Compute baseline statistics for Q&A grounding
     current_sample = history_list[-1] if history_list else None
+    step_goal, sleep_target = _extract_goals_from_text(user_goals)
     analytics_data = calculate_baseline_analytics(
         current_metrics=current_sample,
         history=history_list,
+        step_goal=step_goal,
+        sleep_target=sleep_target,
     )
     block_analytics = format_baseline_analytics_block(analytics_data)
 

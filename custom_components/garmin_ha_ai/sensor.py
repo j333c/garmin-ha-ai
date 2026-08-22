@@ -73,6 +73,11 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-charging",
     ),
+    SensorEntityDescription(
+        key="hrv_status",
+        name="Garmin HRV Status",
+        icon="mdi:heart-flash",
+    ),
 )
 
 

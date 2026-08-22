@@ -117,11 +117,13 @@ def calculate_baseline_analytics(
             total_activity_count += len(acts)
             for act in acts:
                 if isinstance(act, dict):
-                    dur_min = act.get("duration_min")
+                    dur_min = _safe_float(act.get("duration_min"))
                     if dur_min is not None:
-                        total_activity_duration_min += float(dur_min)
-                    elif act.get("duration_sec") is not None:
-                        total_activity_duration_min += float(act["duration_sec"]) / 60.0
+                        total_activity_duration_min += dur_min
+                    else:
+                        dur_sec = _safe_float(act.get("duration_sec"))
+                        if dur_sec is not None:
+                            total_activity_duration_min += dur_sec / 60.0
 
     # Compute baseline means
     mean_sleep = round(sum(sleep_scores) / len(sleep_scores), 1) if sleep_scores else None
@@ -187,13 +189,12 @@ def _classify_hrv_trend(current_hrv: str | None, history_hrv: list[str]) -> str:
             return "Improving (Recovering from unbalanced/low period to balanced)"
         return "Stable & Balanced (Consistent baseline recovery)"
 
-    if latest in ("UNBALANCED", "POOR"):
+    if latest in ("UNBALANCED", "POOR", "LOW"):
         if any(h in ("BALANCED", "OPTIMAL") for h in all_statuses[:-1]):
             return "Declining (Shifted from balanced to unbalanced recovery)"
+        if latest == "LOW":
+            return "Low (Subdued autonomic recovery)"
         return "Consistently Unbalanced (Accumulated strain or incomplete recovery)"
-
-    if latest == "LOW":
-        return "Low (Subdued autonomic recovery)"
 
     return f"Status: {latest}"
 
@@ -206,6 +207,7 @@ def format_baseline_analytics_block(analytics: dict[str, Any]) -> str:
     days = analytics.get("days_analyzed", 0)
     mean_sleep = analytics.get("mean_sleep_score")
     sleep_delta = analytics.get("sleep_delta_vs_avg")
+    sleep_target_delta = analytics.get("sleep_delta_vs_target")
     mean_rhr = analytics.get("mean_resting_hr")
     rhr_delta = analytics.get("rhr_delta_vs_avg")
     mean_stress = analytics.get("mean_avg_stress")
@@ -223,9 +225,13 @@ def format_baseline_analytics_block(analytics: dict[str, Any]) -> str:
         prefix = "+" if val > 0 else ""
         return f"{prefix}{val}{unit}"
 
+    sleep_desc = f"Today vs Avg: {_sign_fmt(sleep_delta, ' pts')}"
+    if sleep_target_delta is not None:
+        sleep_desc += f", Today vs Target: {_sign_fmt(sleep_target_delta, ' pts')}"
+
     lines = [
         f"- Statistical Rolling Window: Past {days} days recorded",
-        f"- Sleep Score Baseline: 7-day Avg = {mean_sleep if mean_sleep is not None else 'N/A'} (Today vs Avg: {_sign_fmt(sleep_delta, ' pts')})",
+        f"- Sleep Score Baseline: 7-day Avg = {mean_sleep if mean_sleep is not None else 'N/A'} ({sleep_desc})",
         f"- Resting Heart Rate Baseline: 7-day Avg = {mean_rhr if mean_rhr is not None else 'N/A'} bpm (Today vs Avg: {_sign_fmt(rhr_delta, ' bpm')})",
         f"- Stress Baseline: 7-day Avg = {mean_stress if mean_stress is not None else 'N/A'} (Today vs Avg: {_sign_fmt(stress_delta, ' pts')})",
         f"- Steps Baseline: 7-day Avg = {mean_steps if mean_steps is not None else 'N/A'} (Today vs Avg: {_sign_fmt(step_delta, ' steps')}, Today vs Goal: {_sign_fmt(step_goal_delta, ' steps')})",

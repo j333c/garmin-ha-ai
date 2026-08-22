@@ -184,10 +184,10 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         assert coordinator.data == mock_metrics
         mock_save_history.assert_called_once_with(mock_metrics.to_dict(), 30)
 
-        # Verify 11 sensor entities + 2 button entities + 1 text + 1 select = 15 total
-        assert len(registered_entities) == 15
+        # Verify 12 sensor entities + 2 button entities + 1 text + 1 select = 16 total
+        assert len(registered_entities) == 16
         sensor_entities = [e for e in registered_entities if getattr(e, "entity_description", None) or "Sensor" in e.__class__.__name__]
-        assert len(sensor_entities) == 11
+        assert len(sensor_entities) == 12
         
         # Verify steps sensor
         steps_sensor = next(e for e in registered_entities if getattr(e, "entity_description", None) and e.entity_description.key == "steps")

@@ -264,3 +264,39 @@ def test_save_and_prune_history_atomic(mock_hass: MagicMock) -> None:
     asyncio.run(run())
 
 
+def test_legacy_token_migration_removes_legacy_store(mock_hass: MagicMock) -> None:
+    """Test that loading from legacy store migrates tokens and removes the legacy store."""
+
+    async def run() -> None:
+        storage = GarminStorage(mock_hass, entry_id="entry_456")
+        storage._token_store.async_load = AsyncMock(return_value=None)
+        storage._token_store.async_save = AsyncMock()
+        storage._legacy_token_store.async_load = AsyncMock(return_value={"token": "legacy_token"})
+        storage._legacy_token_store.async_remove = AsyncMock()
+
+        tokens = await storage.async_load_tokens()
+        assert tokens == {"token": "legacy_token"}
+        storage._token_store.async_save.assert_called_once_with({"token": "legacy_token"})
+        storage._legacy_token_store.async_remove.assert_called_once()
+
+    asyncio.run(run())
+
+
+def test_legacy_history_migration_removes_legacy_store(mock_hass: MagicMock) -> None:
+    """Test that loading from legacy history store migrates data and removes the legacy store."""
+
+    async def run() -> None:
+        storage = GarminStorage(mock_hass, entry_id="entry_456")
+        storage._history_store.async_load = AsyncMock(return_value=None)
+        storage._history_store.async_save = AsyncMock()
+        storage._legacy_history_store.async_load = AsyncMock(return_value={"2026-08-15": {"steps": 10000}})
+        storage._legacy_history_store.async_remove = AsyncMock()
+
+        history = await storage.async_load_history()
+        assert history == {"2026-08-15": {"steps": 10000}}
+        storage._history_store.async_save.assert_called_once_with({"2026-08-15": {"steps": 10000}})
+        storage._legacy_history_store.async_remove.assert_called_once()
+
+    asyncio.run(run())
+
+

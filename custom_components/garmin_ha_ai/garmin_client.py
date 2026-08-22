@@ -436,7 +436,7 @@ class GarminClient:
             summary_data: dict[str, Any] = {}
             try:
                 summary_data = client.get_user_summary(date_str) or {}
-            except (GarminConnectAuthenticationError, GarminConnectConnectionError):
+            except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
                 raise
             except Exception as err:
                 LOGGER.warning("Could not fetch user summary for %s: %s", date_str, err)
@@ -446,7 +446,7 @@ class GarminClient:
             try:
                 sleep_raw = client.get_sleep_data(date_str) or {}
                 sleep_score = _parse_sleep_data(sleep_raw)
-            except GarminConnectAuthenticationError:
+            except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
                 raise
             except Exception as err:
                 LOGGER.debug("Could not fetch sleep data for %s: %s", date_str, err)
@@ -456,7 +456,7 @@ class GarminClient:
             try:
                 hrv_raw = client.get_hrv_data(date_str) or {}
                 hrv_status = _parse_hrv_data(hrv_raw)
-            except GarminConnectAuthenticationError:
+            except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
                 raise
             except Exception as err:
                 LOGGER.debug("Could not fetch HRV data for %s: %s", date_str, err)
@@ -466,7 +466,7 @@ class GarminClient:
             try:
                 raw_activities = client.get_activities_by_date(date_str, date_str) or []
                 activities = _parse_activities(raw_activities)
-            except GarminConnectAuthenticationError:
+            except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
                 raise
             except Exception as err:
                 LOGGER.debug("Could not fetch activities for %s: %s", date_str, err)

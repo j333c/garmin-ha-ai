@@ -103,6 +103,9 @@
       "body_battery_min": {
         "name": "Garmin Body Battery"
       },
+      "hrv_status": {
+        "name": "Garmin HRV Status"
+      },
       "ai_health_report_short": {
         "name": "Garmin AI Health Report Short"
       },

@@ -122,7 +122,8 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             username = self._user_data.get(CONF_GARMIN_USERNAME, "")
             password = self._user_data.get(CONF_GARMIN_PASSWORD, "")
 
-            storage = GarminStorage(self.hass)
+            entry_id = self._reauth_entry.entry_id if self._reauth_entry else None
+            storage = GarminStorage(self.hass, entry_id=entry_id)
             client = GarminClient(self.hass, storage)
 
             # Complete credential login with supplied MFA passcode
@@ -170,7 +171,8 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             username = self._reauth_entry.data[CONF_GARMIN_USERNAME]
             password = user_input[CONF_GARMIN_PASSWORD]
 
-            storage = GarminStorage(self.hass)
+            entry_id = self._reauth_entry.entry_id if self._reauth_entry else None
+            storage = GarminStorage(self.hass, entry_id=entry_id)
             client = GarminClient(self.hass, storage)
 
             try:

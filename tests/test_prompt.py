@@ -207,10 +207,33 @@ def test_assemble_report_prompt_with_analytics_baseline() -> None:
     ]
     current = GarminDailyMetrics(date="2026-08-08", steps=12000, sleep_score=85, resting_hr=53)
 
-    prompt = assemble_report_prompt(current_metrics=current, history=history)
+    prompt = assemble_report_prompt(
+        current_metrics=current,
+        history=history,
+        user_goals="Target 15000 steps and sleep score 85",
+    )
     assert "Sleep Score Baseline: 7-day Avg = 80.0" in prompt
     assert "Resting Heart Rate Baseline: 7-day Avg = 55.0 bpm" in prompt
     assert "HRV Trend Classification: Stable & Balanced" in prompt
+    assert "Today vs Goal: -3000 steps" in prompt
+    assert "Today vs Target: 0 pts" in prompt
+
+
+def test_format_daily_metrics_block_hr_zones() -> None:
+    """Test formatting daily metrics with HR zones."""
+    metrics = GarminDailyMetrics(
+        date="2026-08-15",
+        activities=[
+            {
+                "activity_type": "Cycling",
+                "duration_min": 60.0,
+                "calories": 600,
+                "hr_zones": {"Zone 2": 1800, "Zone 3": 1200},
+            }
+        ],
+    )
+    block = format_daily_metrics_block(metrics)
+    assert "HR Zones: [Zone 2: 1800, Zone 3: 1200]" in block
 
 
 

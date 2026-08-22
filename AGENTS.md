@@ -1,5 +1,5 @@
 <!-- bmad:context -->
-<!-- Verified 2026-08-22 against deb462d. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
+<!-- Verified 2026-08-22 against 3132eb1. Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
 
 ## garmin-ha-ai
 
@@ -24,16 +24,17 @@ Home Assistant custom component integration for Garmin Connect health data and A
 
 ## Running and verifying
 
-- Run `pytest` to execute all 161 unit, API contract, and E2E lifecycle tests.
+- Run `pytest` to execute all 164 unit, API contract, and E2E lifecycle tests.
 
 ## Conventions that differ from defaults
 
 - Store long AI response narratives in entity extra state attributes; Home Assistant entity state strings strictly truncate after 255 characters (enforce <=250 chars).
 - Access local storage via Home Assistant `Store` helper (`homeassistant.helpers.storage.Store`); never perform raw file I/O directly.
-- Ground AI context in local rolling history partitioned per config entry (`GarminStorage`) rather than making repeated cloud requests to Garmin Connect.
+- Ground AI context in local rolling history partitioned per config entry (`GarminStorage(hass, entry_id=...)`) rather than making repeated cloud requests to Garmin Connect.
 
 ## Known pitfalls
 
+- Pass `entry_id` when instantiating `GarminStorage` during config/reauth flows to prevent token writing to legacy unpartitioned storage.
 - Handle Garmin MFA authentication gracefully via reauth flow; session tokens periodically expire requiring user re-authentication.
 - AI provider HTTP 429 quota exhaustion or timeouts must raise integration-level exceptions (`AIEngineQuotaError`, `AIEngineTimeoutError`) without crashing the coordinator polling engine.
 

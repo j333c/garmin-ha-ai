@@ -39,9 +39,9 @@ def test_sensor_setup_entry() -> None:
 
         await async_setup_entry(mock_hass, mock_entry, add_entities)
 
-        # 6 metric sensors + 2 report sensors + 1 last answer sensor + 1 last update sensor + 1 selected report sensor = 11 total
+        # 7 metric sensors (including HRV status) + 2 report sensors + 1 last answer sensor + 1 last update sensor + 1 selected report sensor = 12 total
         assert len(added_entities) == len(SENSOR_DESCRIPTIONS) + 5
-        assert len(added_entities) == 11
+        assert len(added_entities) == 12
 
     asyncio.run(run())
 
@@ -84,6 +84,12 @@ def test_sensor_entity_state_and_attributes() -> None:
     assert bb_entity.native_value == 18
     assert bb_entity.extra_state_attributes["body_battery_min"] == 18
     assert bb_entity.extra_state_attributes["body_battery_max"] == 98
+
+    # Test HRV Status Sensor
+    sample_metrics.hrv_status = "BALANCED"
+    hrv_desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "hrv_status")
+    hrv_entity = GarminSensorEntity(mock_coordinator, hrv_desc, mock_entry)
+    assert hrv_entity.native_value == "BALANCED"
 
     # Test No Data
     mock_coordinator.data = None

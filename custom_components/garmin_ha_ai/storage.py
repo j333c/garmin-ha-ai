@@ -68,6 +68,7 @@ class GarminStorage:
                     legacy = await self._legacy_token_store.async_load()
                     if legacy:
                         await self._token_store.async_save(legacy)
+                        await self._legacy_token_store.async_remove()
                         return legacy
                 return data if data is not None else {}
             except Exception as err:
@@ -91,6 +92,7 @@ class GarminStorage:
                     legacy = await self._legacy_history_store.async_load()
                     if legacy:
                         await self._history_store.async_save(legacy)
+                        await self._legacy_history_store.async_remove()
                         return legacy
                 return data if data is not None else {}
             except Exception as err:

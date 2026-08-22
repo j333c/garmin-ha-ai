@@ -152,17 +152,11 @@
    */
   function smartFindEntity(hass, patterns, domain = "sensor") {
     if (!hass || !hass.states) return "";
-    if (typeof patterns === "string" && (Array.isArray(domain) || typeof domain === "string")) {
+    if (typeof patterns === "string" && Array.isArray(domain)) {
       // Handle swapped arguments: (hass, "sensor", ["pattern1", "pattern2"])
-      if (Array.isArray(domain)) {
-        const temp = patterns;
-        patterns = domain;
-        domain = temp;
-      } else if (!domain.includes(".")) {
-        const temp = patterns;
-        patterns = [domain];
-        domain = temp;
-      }
+      const temp = patterns;
+      patterns = domain;
+      domain = temp;
     }
     if (typeof patterns === "string") {
       patterns = [patterns];
@@ -170,7 +164,8 @@
     if (!Array.isArray(patterns)) {
       return "";
     }
-    const prefix = `${domain}.`;
+    const cleanDomain = typeof domain === "string" && domain ? domain : "sensor";
+    const prefix = `${cleanDomain}.`;
     const entityIds = Object.keys(hass.states).filter((id) => id.startsWith(prefix));
 
     for (const pattern of patterns) {
@@ -1508,6 +1503,10 @@
     _render() {
       if (!this.shadowRoot) return;
 
+      const prevInput = this.shadowRoot.getElementById("chatInput");
+      const savedInputVal = prevInput ? prevInput.value : "";
+      const hadFocus = prevInput && (this.shadowRoot.activeElement === prevInput || document.activeElement === prevInput);
+
       const title = this._config?.title || "Garmin AI Coach";
       const sleepEnt = this._config?.sleep_entity || smartFindEntity(this._hass, ["garmin_sleep_score", "sleep_score", "sleep"], "sensor");
       const battEnt = this._config?.battery_entity || smartFindEntity(this._hass, ["garmin_body_battery", "body_battery"], "sensor");
@@ -1831,6 +1830,13 @@
         });
       }
 
+      if (savedInputVal && chatInput) {
+        chatInput.value = savedInputVal;
+        if (hadFocus) {
+          setTimeout(() => chatInput.focus(), 0);
+        }
+      }
+
       const sendQuestion = async () => {
         const q = chatInput?.value?.trim();
         if (!q || !this._hass) return;
@@ -1841,9 +1847,12 @@
           const response = await this._handleCallService("garmin_ha_ai", "ask_question", { question: q });
           if (response && response.response && response.response.answer) {
             this._directAnswer = response.response;
+            const updatedInput = this.shadowRoot.getElementById("chatInput");
+            if (updatedInput) updatedInput.value = "";
           }
         } catch (err) {
           console.error("Ask Question error:", err);
+          this._directAnswer = { answer: `⚠️ **Error:** ${err.message || err}` };
         } finally {
           this._chatLoading = false;
           this._updateContent();
