@@ -49,7 +49,9 @@
           "fitness_goals": "Fitness- & Gesundheitsziele",
           "coaching_directives": "AI-Coaching-Vorgaben & Tonalität",
           "notification_targets": "Benachrichtigungsdienste (kommagetrennt)",
-          "polling_schedule": "Tägliche Abrufzeit",
+          "polling_mode": "Abrufzeitplan-Modus",
+          "polling_schedule": "Tägliche feste Abrufzeit",
+          "polling_interval": "Periodisches Abrufintervall (Stunden)",
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API-Schlüssel",
           "ai_model": "AI Modell",
@@ -81,6 +83,41 @@
           "Latest Q&A Answer": "Letzte Q&A-Antwort"
         }
       }
+    },
+    "sensor": {
+      "steps": {
+        "name": "Garmin Schritte"
+      },
+      "resting_hr": {
+        "name": "Garmin Ruhepuls"
+      },
+      "sleep_score": {
+        "name": "Garmin Schlafindex"
+      },
+      "avg_stress": {
+        "name": "Garmin Stresslevel"
+      },
+      "weight_kg": {
+        "name": "Garmin Gewicht"
+      },
+      "body_battery_min": {
+        "name": "Garmin Body Battery"
+      },
+      "ai_health_report_short": {
+        "name": "Garmin AI Gesundheitsbericht (Kurz)"
+      },
+      "ai_health_report_long": {
+        "name": "Garmin AI Gesundheitsbericht (Vollständig)"
+      },
+      "ai_last_answer": {
+        "name": "Garmin AI Letzte Antwort"
+      },
+      "ai_last_update": {
+        "name": "Garmin AI Letzte Aktualisierung"
+      },
+      "ai_selected_report": {
+        "name": "Garmin AI Ausgewählter Bericht"
+      }
     }
   },
   "selector": {
@@ -89,6 +126,22 @@
         "gemini": "Google Gemini",
         "openai": "OpenAI (oder kompatibel)"
       }
+    },
+    "polling_mode": {
+      "options": {
+        "daily": "Tägliche feste Uhrzeit",
+        "interval": "Periodisches Intervall"
+      }
+    }
+  },
+  "services": {
+    "generate_report": {
+      "name": "AI-Bericht generieren",
+      "description": "Erstellt sofort einen täglichen AI-Gesundheitsbericht basierend auf aktuellen Metriken und Historie."
+    },
+    "ask_question": {
+      "name": "AI-Coach fragen",
+      "description": "Sendet eine Frage an den AI-Gesundheitscoach mit historischem Gesundheitskontext."
     }
   }
 }

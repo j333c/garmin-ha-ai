@@ -38,22 +38,42 @@ from .const import (
     CONF_COACHING_DIRECTIVES,
     CONF_FITNESS_GOALS,
     CONF_NOTIFICATION_TARGETS,
+    CONF_POLLING_INTERVAL,
+    CONF_POLLING_MODE,
+    CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
     DEFAULT_AI_PROVIDER,
     DEFAULT_POLLING_INTERVAL_HOURS,
+    DEFAULT_POLLING_MODE,
     DEFAULT_RETENTION_DAYS,
     DOMAIN,
     LOGGER,
+    POLLING_MODE_INTERVAL,
     REPORT_VIEW_OPTIONS,
     REPORT_VIEW_SHORT,
+)
+from .exceptions import (
+    AIEngineError as CentralizedAIEngineError,
+    GarminAIError,
+    GarminAuthError,
+    GarminRateLimitError,
 )
 from .garmin_client import (
     GarminClient,
     GarminConnectTooManyRequestsError,
-    GarminRateLimitError,
 )
 from .models import AIHealthReport, GarminDailyMetrics
 from .storage import GarminStorage
+
+
+def calculate_coordinator_interval(entry: ConfigEntry) -> timedelta:
+    """Calculate polling interval based on configured polling mode."""
+    options = {**entry.data, **entry.options}
+    mode = options.get(CONF_POLLING_MODE, DEFAULT_POLLING_MODE)
+    if mode == POLLING_MODE_INTERVAL:
+        interval_hours = int(options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL_HOURS))
+        return timedelta(hours=max(1, interval_hours))
+    return timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 
 
 class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
@@ -88,8 +108,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.question_input: str = ""
         self.report_display_mode: str = REPORT_VIEW_SHORT
 
-        # Schedule daily polling intervals
-        update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
+        # Schedule polling interval dynamically based on options
+        update_interval = calculate_coordinator_interval(entry)
 
         super().__init__(
             hass,

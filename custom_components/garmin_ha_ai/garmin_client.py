@@ -29,19 +29,19 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 import homeassistant.util.dt as dt_util
 
 from .const import LOGGER
+from .exceptions import (
+    GarminAuthError,
+    GarminConnectionError,
+    GarminDataParsingError,
+    GarminError,
+    GarminMfaRequired,
+    GarminRateLimitError,
+    GarminSessionExpiredError,
+)
 from .models import GarminDailyMetrics
 from .storage import GarminStorage
 
-
-class GarminMfaRequired(Exception):
-    """Exception raised when Garmin Connect requires MFA verification."""
-
-
 GarminConnectMfaRequired = GarminMfaRequired
-
-
-class GarminRateLimitError(GarminConnectConnectionError):
-    """Exception raised when Garmin Connect rate-limits requests (HTTP 429)."""
 
 
 def _parse_weight(weight_raw: Any) -> float | None:

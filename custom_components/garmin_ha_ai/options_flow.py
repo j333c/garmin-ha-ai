@@ -19,17 +19,24 @@ from .const import (
     CONF_COACHING_DIRECTIVES,
     CONF_FITNESS_GOALS,
     CONF_NOTIFICATION_TARGETS,
+    CONF_POLLING_INTERVAL,
+    CONF_POLLING_MODE,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
     DEFAULT_AI_MODEL_GEMINI,
     DEFAULT_AI_MODEL_OPENAI,
     DEFAULT_AI_PROVIDER,
+    DEFAULT_POLLING_INTERVAL_HOURS,
+    DEFAULT_POLLING_MODE,
     DEFAULT_POLLING_TIME,
     DEFAULT_RETENTION_DAYS,
     FALLBACK_OPENAI_MODELS,
     LOGGER,
     MAX_RETENTION_DAYS,
     MIN_RETENTION_DAYS,
+    POLLING_INTERVAL_OPTIONS,
+    POLLING_MODE_DAILY,
+    POLLING_MODE_INTERVAL,
     PROVIDER_GEMINI,
     PROVIDER_OPENAI,
 )
@@ -142,11 +149,41 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                     default=current_options.get(CONF_NOTIFICATION_TARGETS, ""),
                 ): str,
                 vol.Optional(
+                    CONF_POLLING_MODE,
+                    default=current_options.get(CONF_POLLING_MODE, DEFAULT_POLLING_MODE),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(
+                                value=POLLING_MODE_DAILY, label="Daily Fixed Time"
+                            ),
+                            selector.SelectOptionDict(
+                                value=POLLING_MODE_INTERVAL, label="Periodic Interval"
+                            ),
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Optional(
                     CONF_POLLING_SCHEDULE,
                     default=current_options.get(
                         CONF_POLLING_SCHEDULE, DEFAULT_POLLING_TIME
                     ),
                 ): selector.TimeSelector(selector.TimeSelectorConfig()),
+                vol.Optional(
+                    CONF_POLLING_INTERVAL,
+                    default=str(current_options.get(
+                        CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL_HOURS
+                    )),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=str(opt), label=f"Every {opt} hours")
+                            for opt in POLLING_INTERVAL_OPTIONS
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     CONF_AI_PROVIDER,
                     default=provider,

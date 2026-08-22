@@ -7,28 +7,31 @@ from collections.abc import Callable, Coroutine
 import logging
 from typing import Any, TypeVar
 
+from ..exceptions import (
+    AIEngineAuthError,
+    AIEngineClientError,
+    AIEngineConnectionError,
+    AIEngineError,
+    AIEngineModelNotFoundError,
+    AIEngineQuotaError,
+    AIEngineTimeoutError,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-
-class AIEngineError(Exception):
-    """Base exception for AI Engine errors."""
-
-
-class AIEngineTimeoutError(AIEngineError):
-    """Exception raised when AI provider request times out."""
-
-
-class AIEngineQuotaError(AIEngineError):
-    """Exception raised when AI provider quota or rate limit is exceeded (HTTP 429)."""
-
-
-class AIEngineClientError(AIEngineError):
-    """Exception raised when AI provider returns a non-retryable 4xx client error.
-
-    Examples: 404 model not found, 400 invalid request, 401 unauthorized.
-    """
+__all__ = [
+    "AIEngineError",
+    "AIEngineAuthError",
+    "AIEngineClientError",
+    "AIEngineConnectionError",
+    "AIEngineModelNotFoundError",
+    "AIEngineQuotaError",
+    "AIEngineTimeoutError",
+    "BaseAIProvider",
+    "async_with_retry",
+]
 
 
 class BaseAIProvider(ABC):
@@ -100,4 +103,3 @@ async def async_with_retry(
             # Await asynchronous sleep before next retry attempt
             await asyncio.sleep(delay)
             delay *= backoff_factor
-

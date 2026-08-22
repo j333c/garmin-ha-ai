@@ -49,7 +49,9 @@
           "fitness_goals": "Fitness & Health Goals",
           "coaching_directives": "AI Coaching Directives & Tone",
           "notification_targets": "Notification Target Services (comma-separated)",
-          "polling_schedule": "Daily Polling Schedule",
+          "polling_mode": "Polling Schedule Mode",
+          "polling_schedule": "Daily Fixed Polling Time",
+          "polling_interval": "Periodic Polling Interval (Hours)",
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API Key",
           "ai_model": "AI Model",
@@ -81,6 +83,41 @@
           "Latest Q&A Answer": "Latest Q&A Answer"
         }
       }
+    },
+    "sensor": {
+      "steps": {
+        "name": "Garmin Steps"
+      },
+      "resting_hr": {
+        "name": "Garmin Resting Heart Rate"
+      },
+      "sleep_score": {
+        "name": "Garmin Sleep Score"
+      },
+      "avg_stress": {
+        "name": "Garmin Stress Level"
+      },
+      "weight_kg": {
+        "name": "Garmin Weight"
+      },
+      "body_battery_min": {
+        "name": "Garmin Body Battery"
+      },
+      "ai_health_report_short": {
+        "name": "Garmin AI Health Report Short"
+      },
+      "ai_health_report_long": {
+        "name": "Garmin AI Health Report Long"
+      },
+      "ai_last_answer": {
+        "name": "Garmin AI Last Answer"
+      },
+      "ai_last_update": {
+        "name": "Garmin AI Last Update"
+      },
+      "ai_selected_report": {
+        "name": "Garmin AI Selected Report"
+      }
     }
   },
   "selector": {
@@ -89,6 +126,22 @@
         "gemini": "Google Gemini",
         "openai": "OpenAI (or compatible)"
       }
+    },
+    "polling_mode": {
+      "options": {
+        "daily": "Daily Fixed Time",
+        "interval": "Periodic Interval"
+      }
+    }
+  },
+  "services": {
+    "generate_report": {
+      "name": "Generate AI Report",
+      "description": "Forces immediate daily health briefing generation using latest metrics and history."
+    },
+    "ask_question": {
+      "name": "Ask AI Coach",
+      "description": "Submits a question to the AI health coach with historical health context."
     }
   }
 }

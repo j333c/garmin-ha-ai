@@ -79,6 +79,14 @@ MAX_RETENTION_DAYS: Final[int] = 90
 DEFAULT_POLLING_TIME: Final[str] = "06:00:00"
 DEFAULT_POLLING_INTERVAL_HOURS: Final[int] = 24
 
+# Polling Mode Settings
+CONF_POLLING_MODE: Final[str] = "polling_mode"
+POLLING_MODE_DAILY: Final[str] = "daily"
+POLLING_MODE_INTERVAL: Final[str] = "interval"
+CONF_POLLING_INTERVAL: Final[str] = "polling_interval"
+DEFAULT_POLLING_MODE: Final[str] = POLLING_MODE_DAILY
+POLLING_INTERVAL_OPTIONS: Final[list[int]] = [1, 3, 6, 12, 24]
+
 # Service Names
 SERVICE_GENERATE_REPORT: Final[str] = "generate_report"
 SERVICE_ASK_QUESTION: Final[str] = "ask_question"
