@@ -6,12 +6,15 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from ..helpers import truncate_entity_state
 from ..models import AIHealthReport, GarminDailyMetrics
 
 _LOGGER = logging.getLogger(__name__)
 
+# Maximum character threshold for 7-day historical context to prevent token budget blowup
 DEFAULT_MAX_HISTORY_CHARS = 3000
 
+# Default fallbacks if user has not configured custom coaching goals or personas
 DEFAULT_USER_GOALS = "Maintain overall health, optimize daily energy, and support balanced recovery."
 DEFAULT_COACHING_DIRECTIVES = (
     "Provide evidence-based, actionable, and encouraging health coaching recommendations. "
@@ -20,7 +23,11 @@ DEFAULT_COACHING_DIRECTIVES = (
 
 
 def sanitize_prompt_input(text: str | None) -> str:
-    """Sanitize user-provided prompt strings to prevent delimiter and tag injection."""
+    """Sanitize user-provided prompt strings to prevent delimiter and tag injection.
+
+    Neutralizes markdown heading sequences matching our block delimiters (e.g. '### BLOCK 1')
+    and strips <summary> tags to ensure clean parsing of the LLM's output structure.
+    """
     if not text:
         return ""
     # Neutralize block delimiter headers that mimic prompt structure
@@ -42,7 +49,10 @@ def _format_metric_val(val: Any, unit: str = "", pending_note: str = "") -> str:
 
 
 def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
-    """Format Block 1: Current Day Metrics."""
+    """Format Block 1: Current Day Metrics.
+
+    Formats today's health indicators and workout list into a bulleted list for LLM context.
+    """
     if not metrics:
         return "No metrics recorded for today."
 
@@ -59,6 +69,7 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
         f"- Weight: {_format_metric_val(metrics.weight_kg, ' kg')}",
     ]
 
+    # Format logged workouts / activities
     if metrics.activities:
         lines.append("- Logged Activities:")
         for act in metrics.activities:
@@ -83,11 +94,16 @@ def truncate_history_context(
 ) -> tuple[str, bool]:
     """Format history list into text and truncate older entries if total length exceeds max_chars.
 
-    Returns a tuple of (formatted_history_text, was_truncated).
+    Prioritizes the most recent days by traversing newest-to-oldest until max_chars is reached,
+    then formats back into chronological order.
+
+    Returns:
+        tuple of (formatted_history_text, was_truncated).
     """
     if not history:
         return "No previous 7-day history recorded yet.", False
 
+    # Normalize dict or list representations into a list of daily metric records
     if isinstance(history, dict):
         history_list = [history[k] for k in sorted(history.keys())]
     elif isinstance(history, list):
@@ -102,9 +118,9 @@ def truncate_history_context(
     total_len = 0
     was_truncated = False
 
-    # Take up to recent 7 days
+    # Take up to the 7 most recent days
     recent_history = history_list[-7:] if len(history_list) > 7 else history_list
-    # Process from newest to oldest for safety truncation
+    # Process from newest to oldest for safe backward truncation
     reversed_history = list(reversed(recent_history))
 
     for item in reversed_history:
@@ -127,6 +143,7 @@ def truncate_history_context(
             f"HRV: {hrv} | Stress: {stress} | Resting HR: {rhr}"
         )
 
+        # Check if adding this day exceeds our token-budget character bound
         if total_len + len(day_text) + 1 > max_chars:
             was_truncated = True
             _LOGGER.warning(
@@ -138,7 +155,7 @@ def truncate_history_context(
         formatted_days.append(day_text)
         total_len += len(day_text) + 1
 
-    # Re-reverse back to chronological order
+    # Re-reverse back to chronological order for natural reading
     chronological = list(reversed(formatted_days))
     return "\n".join(chronological), was_truncated
 
@@ -149,23 +166,26 @@ def parse_ai_health_report(
     model_used: str,
     timestamp: str | None = None,
 ) -> AIHealthReport:
-    """Parse raw AI response text into structured AIHealthReport."""
+    """Parse raw AI response text into structured AIHealthReport.
+
+    Extracts short summary from <summary> tags, falling back to first line if tags are omitted.
+    Ensures short summary is safely clamped within 250 characters.
+    """
     ts = timestamp or datetime.now(timezone.utc).isoformat()
     match = re.search(r"<summary>(.*?)</summary>", raw_text, re.DOTALL | re.IGNORECASE)
     if match:
         short_summary = match.group(1).strip()
     else:
-        # Fallback to first non-empty line or sentence
+        # Fallback to first non-empty line or sentence if tags were omitted
         lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
         short_summary = lines[0] if lines else "Health report generated."
 
-    # Truncate short summary strictly under 250 characters
-    if len(short_summary) > 250:
-        short_summary = short_summary[:247] + "..."
+    # Enforce strict 250-character limit via shared truncate_entity_state helper
+    clean_short_summary = truncate_entity_state(short_summary, max_len=250)
 
     return AIHealthReport(
         timestamp=ts,
-        short_summary=short_summary,
+        short_summary=clean_short_summary,
         full_report=raw_text.strip(),
         provider_used=provider_used,
         model_used=model_used,
@@ -179,7 +199,14 @@ def assemble_report_prompt(
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
 ) -> str:
-    """Assemble 5-block prompt context payload for AI report generation."""
+    """Assemble 5-block prompt context payload for daily AI report generation.
+
+    Block 1: Current Day Metrics (Steps, HR, Sleep, Stress, HRV, Body Battery, Activities)
+    Block 2: Historical Trends (7-day rolling context)
+    Block 3: User Goals & Profile (Customizable)
+    Block 4: Persona Directives & Tone (Customizable)
+    Block 5: Structural Output Formatting Rules (Summary tags and markdown headings)
+    """
     # Block 1: Current Day Metrics
     block1_content = format_daily_metrics_block(current_metrics)
 
@@ -210,6 +237,7 @@ def assemble_report_prompt(
         "4. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep."
     )
 
+    # Assemble into full structured context string
     prompt = (
         "### BLOCK 1: CURRENT DAY METRICS\n"
         f"{block1_content}\n\n"
@@ -233,7 +261,10 @@ def assemble_qa_prompt(
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
 ) -> str:
-    """Assemble prompt payload for interactive Q&A session."""
+    """Assemble prompt payload for interactive Q&A session.
+
+    Grounds user questions in rolling metrics history, personal fitness goals, and coaching directives.
+    """
     history_list = history or []
     block_history_content, _ = truncate_history_context(
         history_list, max_chars=max_history_chars
@@ -262,4 +293,5 @@ def assemble_qa_prompt(
     )
 
     return prompt
+
 

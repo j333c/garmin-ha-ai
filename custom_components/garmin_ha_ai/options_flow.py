@@ -63,18 +63,21 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage integration options."""
+        # Process updated configuration options submitted by user
         if user_input is not None:
             retention_days = user_input.get(
                 CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS
             )
             storage = GarminStorage(self.hass)
             try:
+                # Prune history immediately if retention period is reduced
                 await storage.async_prune_history(retention_days)
             except Exception as err:
                 LOGGER.warning("Error pruning history during options flow: %s", err)
 
             return self.async_create_entry(title="", data=user_input)
 
+        # Merge existing options and base config entry data for default field values
         current_options = self._entry.options
         current_data = self._entry.data
 
@@ -94,7 +97,7 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_AI_MODEL, current_data.get(CONF_AI_MODEL, default_model)
         )
 
-        # Discover or build available model list
+        # Query provider API dynamically to discover available models
         if provider == PROVIDER_GEMINI:
             available_models = await async_list_gemini_models(api_key, hass=self.hass)
         else:
@@ -105,9 +108,11 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                 api_key, base_url=base_url, hass=self.hass
             )
 
+        # Ensure currently selected model is included in dropdown options
         if current_model and current_model not in available_models:
             available_models.insert(0, current_model)
 
+        # Schema defining available configuration settings in UI
         options_schema = vol.Schema(
             {
                 vol.Optional(
@@ -185,5 +190,6 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=options_schema,
         )
+
 
 

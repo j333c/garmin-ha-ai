@@ -23,7 +23,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _format_gemini_error(err: Exception) -> tuple[int | None, str]:
-    """Extract HTTP status code and clean human-readable error description from Gemini API error."""
+    """Extract HTTP status code and clean human-readable error description from Gemini API error.
+
+    Parses SDK error codes and error response dictionaries to provide user-friendly
+    messages for 503 (high demand), 429 (quota exceeded), 404 (model retired/not found),
+    and 401/403 (invalid API key).
+    """
     code = getattr(err, "code", None) or getattr(err, "status_code", None)
     raw_message = getattr(err, "message", None) or str(err)
     if isinstance(raw_message, dict):
@@ -32,14 +37,21 @@ def _format_gemini_error(err: Exception) -> tuple[int | None, str]:
         raw_message = str(raw_message)
 
     lower_msg = raw_message.lower()
+    # 503 Service Unavailable / High demand
     if code == 503 or "503" in raw_message or "unavailable" in lower_msg or "high demand" in lower_msg:
         if "high demand" in lower_msg:
             return 503, f"Gemini model is currently experiencing high demand (503 Service Unavailable). Please try again in a few moments: {raw_message}"
         return 503, f"Gemini service unavailable (503): {raw_message}"
+
+    # 429 Resource exhausted / Quota limit
     if code == 429 or "resource_exhausted" in lower_msg or "quota" in lower_msg or "rate limit" in lower_msg:
         return 429, f"Gemini API quota or rate limit exceeded (429): {raw_message}"
+
+    # 404 Model not found / Deprecated model ID
     if code == 404 or "not_found" in lower_msg or "no longer available" in lower_msg or "not found" in lower_msg:
         return 404, f"Gemini model not found (404): {raw_message}"
+
+    # 401/403 Invalid API key or permission denied
     if code in (401, 403) or "api_key_invalid" in lower_msg or "unauthorized" in lower_msg or "permission_denied" in lower_msg:
         return code, f"Gemini API authentication failed ({code}): {raw_message}"
 
@@ -69,8 +81,10 @@ class GeminiProvider(BaseAIProvider):
             return self._client
 
         def _init_client() -> genai.Client:
+            # Instantiate google-genai Client with API key
             return genai.Client(api_key=self.api_key)
 
+        # Offload synchronous SDK initialization to HA executor thread pool
         if self.hass and hasattr(self.hass, "async_add_executor_job"):
             self._client = await self.hass.async_add_executor_job(_init_client)
         else:
@@ -84,7 +98,7 @@ class GeminiProvider(BaseAIProvider):
     async def async_generate_response(
         self, prompt: str, system_instruction: str | None = None
     ) -> str:
-        """Generate response asynchronously using google-genai SDK."""
+        """Generate response asynchronously using google-genai SDK with automatic retry."""
         client = await self.async_get_client()
 
         async def _call_api() -> str:
@@ -95,6 +109,7 @@ class GeminiProvider(BaseAIProvider):
                 )
 
             try:
+                # Use async client interface (client.aio) with a 30s timeout guard
                 response = await asyncio.wait_for(
                     client.aio.models.generate_content(
                         model=self.model,
@@ -108,6 +123,7 @@ class GeminiProvider(BaseAIProvider):
                 return response.text
             except genai_errors.APIError as err:
                 code, clean_msg = _format_gemini_error(err)
+                # Map API error codes to integration-level exceptions
                 if code == 429 or "RESOURCE_EXHAUSTED" in clean_msg or "quota" in clean_msg.lower():
                     raise AIEngineQuotaError(f"Gemini API quota exceeded: {clean_msg}") from err
                 if code in (400, 401, 403, 404) or "NOT_FOUND" in clean_msg or "not found" in clean_msg.lower() or "no longer available" in clean_msg.lower() or "INVALID_ARGUMENT" in clean_msg:
@@ -122,6 +138,7 @@ class GeminiProvider(BaseAIProvider):
                     raise
                 raise AIEngineError(f"Unexpected error calling Gemini API: {err}") from err
 
+        # Wrap in exponential backoff retry loop (retrying server errors and timeouts)
         return await async_with_retry(
             _call_api,
             max_retries=2,
@@ -145,6 +162,7 @@ async def async_list_gemini_models(
             if hasattr(active_client, "models") and hasattr(active_client.models, "list"):
                 for m in active_client.models.list():
                     name = getattr(m, "name", None) or getattr(m, "model", None) or str(m)
+                    # Strip 'models/' prefix if present in API return string
                     if name.startswith("models/"):
                         name = name[7:]
                     if "gemini" in name.lower():
@@ -160,7 +178,7 @@ async def async_list_gemini_models(
             discovered = await asyncio.to_thread(_fetch_models_sync)
 
         if discovered:
-            # Combine discovered models with fallback models preserving unique items
+            # Combine discovered models with curated fallback models preserving uniqueness
             combined = []
             for m in discovered:
                 if m not in combined:
@@ -173,4 +191,5 @@ async def async_list_gemini_models(
         _LOGGER.debug("Error during dynamic Gemini model discovery: %s", err)
 
     return list(FALLBACK_GEMINI_MODELS)
+
 

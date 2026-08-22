@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
-
-from urllib.parse import urlparse
 
 from ..const import FALLBACK_OPENAI_MODELS
 from .base import (
@@ -20,6 +19,7 @@ from .base import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Disallowed hosts to prevent Server-Side Request Forgery (SSRF) against cloud instance metadata services
 DISALLOWED_HOSTS = frozenset({
     "169.254.169.254",
     "metadata.google.internal",
@@ -28,7 +28,11 @@ DISALLOWED_HOSTS = frozenset({
 
 
 def validate_base_url(base_url: str | None) -> str:
-    """Validate and normalize base_url, allowing http/https (local & remote) while blocking cloud metadata endpoints."""
+    """Validate and normalize base_url, allowing http/https (local & remote) while blocking cloud metadata endpoints.
+
+    Protects Home Assistant against SSRF vulnerabilities by validating URI schemes and
+    rejecting cloud link-local metadata endpoints.
+    """
     url = (base_url or "https://api.openai.com/v1").strip().rstrip("/")
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -44,7 +48,11 @@ def validate_base_url(base_url: str | None) -> str:
 
 
 class OpenAIProvider(BaseAIProvider):
-    """Generic OpenAI-compatible AI Engine Provider using httpx async client."""
+    """Generic OpenAI-compatible AI Engine Provider using httpx async client.
+
+    Supports official OpenAI endpoints as well as compatible self-hosted / local
+    inference servers (e.g. Ollama, LM Studio, vLLM, LocalAI, OpenRouter).
+    """
 
     def __init__(
         self,
@@ -82,6 +90,7 @@ class OpenAIProvider(BaseAIProvider):
                 "Content-Type": "application/json",
             }
 
+            # Build standard OpenAI messages array with optional system instruction
             messages: list[dict[str, str]] = []
             if system_instruction:
                 messages.append({"role": "system", "content": system_instruction})
@@ -93,19 +102,23 @@ class OpenAIProvider(BaseAIProvider):
             }
 
             try:
+                # Perform asynchronous HTTP POST request
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(endpoint, headers=headers, json=payload)
 
+                # HTTP 429 Quota / Rate limit
                 if response.status_code == 429:
                     raise AIEngineQuotaError(
                         f"OpenAI API rate limit / quota exceeded (429): {response.text}"
                     )
 
+                # Non-retryable 4xx client errors (400 bad request, 401 invalid key, 404 model not found)
                 if response.status_code in (400, 401, 403, 404):
                     raise AIEngineClientError(
                         f"OpenAI API client error ({response.status_code}): {response.text}"
                     )
 
+                # 5xx server errors
                 if response.status_code >= 500:
                     raise AIEngineError(
                         f"OpenAI API server error ({response.status_code}): {response.text}"
@@ -113,6 +126,7 @@ class OpenAIProvider(BaseAIProvider):
 
                 response.raise_for_status()
 
+                # Parse JSON response payload and extract text content
                 data = response.json()
                 choices = data.get("choices")
                 first_choice = choices[0] if (choices and isinstance(choices, list)) else {}
@@ -135,6 +149,7 @@ class OpenAIProvider(BaseAIProvider):
             except (KeyError, ValueError) as err:
                 raise AIEngineError(f"Failed to parse OpenAI API JSON response: {err}") from err
 
+        # Wrap in exponential backoff retry loop
         return await async_with_retry(
             _call_api,
             max_retries=2,
@@ -156,7 +171,7 @@ async def async_list_openai_models(
     except AIEngineClientError:
         return list(FALLBACK_OPENAI_MODELS)
 
-    # If default endpoint and no API key, return fallback immediately
+    # If default official endpoint and no API key, return fallback immediately
     if not api_key and "api.openai.com" in url:
         return list(FALLBACK_OPENAI_MODELS)
 
@@ -224,4 +239,5 @@ async def async_list_openai_models(
         _LOGGER.debug("Error during dynamic OpenAI model discovery: %s", err)
 
     return list(FALLBACK_OPENAI_MODELS)
+
 

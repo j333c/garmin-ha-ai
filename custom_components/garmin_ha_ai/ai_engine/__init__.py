@@ -51,15 +51,24 @@ def get_ai_provider(
     base_url: str | None = None,
     **kwargs: Any,
 ) -> BaseAIProvider:
-    """Factory function to instantiate configured AI Engine Provider."""
+    """Factory function to instantiate configured AI Engine Provider.
+
+    Dispatches to Google Gemini or generic OpenAI provider instance based on configuration.
+    """
     provider_lower = (provider_type or "").lower()
+
+    # Google Gemini Provider
     if provider_lower == PROVIDER_GEMINI:
         selected_model = model or DEFAULT_AI_MODEL_GEMINI
         return GeminiProvider(api_key=api_key, model=selected_model, base_url=base_url, **kwargs)
+
+    # Generic OpenAI / OpenAI-compatible endpoint Provider
     if provider_lower == PROVIDER_OPENAI:
         selected_model = model or DEFAULT_AI_MODEL_OPENAI
         selected_base_url = base_url or DEFAULT_AI_BASE_URL
         return OpenAIProvider(
             api_key=api_key, model=selected_model, base_url=selected_base_url, **kwargs
         )
+
     raise ValueError(f"Unsupported AI provider type: '{provider_type}'")
+

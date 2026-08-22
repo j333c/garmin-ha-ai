@@ -57,7 +57,14 @@ from .storage import GarminStorage
 
 
 class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
-    """Class to manage fetching Garmin metrics data on a scheduled interval."""
+    """Class to manage fetching Garmin metrics data on a scheduled interval.
+
+    Orchestrates:
+    1. Polling Garmin Connect daily metrics and storing them in local rolling history.
+    2. Generating AI Health Briefings asynchronously using the configured AI provider.
+    3. Dispatching notifications to configured mobile app or persistent notification targets.
+    4. Processing interactive Q&A queries from Lovelace dashboard cards.
+    """
 
     def __init__(
         self,
@@ -70,6 +77,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.entry = entry
         self.client = client
         self.storage = storage
+
+        # State storage for AI report and interactive Q&A
         self.latest_report: AIHealthReport | None = None
         self.latest_answer: dict[str, Any] | None = None
         self.latest_error: str | None = None
@@ -79,6 +88,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.question_input: str = ""
         self.report_display_mode: str = REPORT_VIEW_SHORT
 
+        # Schedule daily polling intervals
         update_interval = timedelta(hours=DEFAULT_POLLING_INTERVAL_HOURS)
 
         super().__init__(
@@ -89,7 +99,12 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         )
 
     async def async_dispatch_notification(self, report: AIHealthReport) -> None:
-        """Dispatch generated AI health report to configured notification targets with fault tolerance."""
+        """Dispatch generated AI health report to configured notification targets with fault tolerance.
+
+        Supports comma-separated targets such as:
+        - 'persistent_notification' -> creates a Home Assistant persistent notification
+        - 'notify.mobile_app_phone' -> sends actionable notification to Home Assistant companion app
+        """
         options = {**self.entry.data, **self.entry.options}
         target_str = str(options.get(CONF_NOTIFICATION_TARGETS, "") or "").strip()
 
@@ -104,6 +119,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
 
         for target in targets:
             try:
+                # 1. Home Assistant persistent notification
                 if target == "persistent_notification":
                     await self.hass.services.async_call(
                         "persistent_notification",
@@ -115,6 +131,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                         },
                     )
                     LOGGER.info("Successfully dispatched persistent notification report")
+                # 2. Companion app or notify service (notify.xyz)
                 elif target.startswith("notify.") and len(target.split(".", 1)[1].strip()) > 0:
                     domain, service = target.split(".", 1)
                     await self.hass.services.async_call(
@@ -133,7 +150,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 LOGGER.warning("Failed to dispatch notification to target '%s': %s", target, err)
 
     async def async_generate_report(self, force: bool = False) -> AIHealthReport | None:
-        """Generate AI Health Report with debouncing lock."""
+        """Generate AI Health Report with debouncing lock to prevent duplicate LLM calls."""
         if self._is_generating:
             LOGGER.warning("AI report generation already in progress; skipping duplicate trigger")
             return None
@@ -145,6 +162,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 LOGGER.debug("No cached metrics available; fetching daily metrics from Garmin")
                 metrics = await self.client.async_fetch_daily_metrics()
 
+            # Load 7-day rolling history snapshot from local storage
             history_data = await self.storage.async_load_history()
 
             options = {**self.entry.data, **self.entry.options}
@@ -159,6 +177,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 LOGGER.warning("AI provider API key is not configured; skipping report generation")
                 return None
 
+            # Assemble 5-block prompt payload
             prompt = assemble_report_prompt(
                 current_metrics=metrics,
                 history=history_data,
@@ -166,6 +185,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 coaching_directives=directives,
             )
 
+            # Instantiate pluggable AI provider driver
             provider = get_ai_provider(
                 provider_type=provider_type,
                 api_key=api_key,
@@ -180,15 +200,18 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 model_used=getattr(provider, "model", model or "default"),
             )
 
+            # Update coordinator state and notify sensor entities
             self.latest_report = report
             self.latest_error = None
             self.last_update_time = dt_util.now()
             self.async_update_listeners()
             LOGGER.info("Successfully generated AI health report using provider %s", provider_type)
 
+            # Dispatch notification to configured channels
             await self.async_dispatch_notification(report)
             return report
         except AIEngineError as err:
+            # Capture error details for UI inspection without crashing the coordinator
             self.latest_error = str(err)
             self.last_error_time = dt_util.now()
             self.async_update_listeners()
@@ -204,7 +227,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             self._is_generating = False
 
     def set_question_input(self, value: str) -> None:
-        """Set the question input string."""
+        """Set the question input string buffer and notify UI listeners."""
         self.question_input = value
         self.async_update_listeners()
 
@@ -241,6 +264,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         if not api_key:
             raise HomeAssistantError("AI API key is not configured.")
 
+        # Load historical metrics context and slice requested days
         history_dict = await self.storage.async_load_history()
         history_list = []
         if isinstance(history_dict, dict) and history_dict:
@@ -250,6 +274,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             recent_dates = sorted_dates[-available_days:] if available_days > 0 else []
             history_list = [history_dict[d] for d in recent_dates]
 
+        # Assemble interactive Q&A prompt
         prompt = assemble_qa_prompt(
             question=target_question,
             history=history_list,
@@ -292,11 +317,19 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self.async_update_listeners()
 
     async def _async_update_data(self) -> GarminDailyMetrics:
-        """Fetch daily health and fitness data from Garmin Connect."""
+        """Fetch daily health and fitness data from Garmin Connect.
+
+        Called automatically by Home Assistant on scheduled interval.
+        Saves snapshot to rolling history, prunes old entries, and kicks off AI report generation.
+        """
         try:
+            # 1. Fetch metrics from Garmin Connect Cloud
             metrics = await self.client.async_fetch_daily_metrics()
+
+            # 2. Persist metrics snapshot into local storage
             await self.storage.async_save_daily_metrics(metrics.to_dict())
 
+            # 3. Prune history older than configured retention period
             options = {**self.entry.data, **self.entry.options}
             retention_days = int(options.get(CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS))
             await self.storage.async_prune_history(retention_days)
@@ -307,7 +340,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 metrics.steps,
             )
             self.last_update_time = dt_util.now()
-            # Trigger background AI report generation automatically after sync
+
+            # 4. Trigger background AI report generation automatically after sync
             self.hass.async_create_task(self.async_generate_report())
             return metrics
         except (ConfigEntryAuthFailed, GarminConnectAuthenticationError) as err:
@@ -315,10 +349,12 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             raise ConfigEntryAuthFailed(f"Garmin authentication failed: {err}") from err
         except (GarminRateLimitError, GarminConnectTooManyRequestsError) as err:
             LOGGER.warning("Garmin Connect API rate limited (HTTP 429); retaining existing metrics: %s", err)
+            # Retain cached data on rate limit instead of setting entities unavailable
             if self.data is not None:
                 return self.data
             raise UpdateFailed(f"Garmin Connect rate limit (HTTP 429): {err}") from err
         except (GarminConnectConnectionError, Exception) as err:
             LOGGER.warning("Error fetching Garmin data: %s", err)
             raise UpdateFailed(f"Error fetching Garmin data: {err}") from err
+
 

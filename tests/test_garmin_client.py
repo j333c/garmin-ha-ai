@@ -375,3 +375,124 @@ def test_login_with_tokens_rate_limit() -> None:
     asyncio.run(run())
 
 
+def test_parse_sleep_data() -> None:
+    """Test _parse_sleep_data parses overall score correctly."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_sleep_data
+
+    # Valid sleep score
+    raw = {"dailySleepDTO": {"sleepScores": {"overall": {"value": 85}}}}
+    assert _parse_sleep_data(raw) == 85
+
+    # Missing or invalid payload
+    assert _parse_sleep_data(None) is None
+    assert _parse_sleep_data({}) is None
+    assert _parse_sleep_data({"dailySleepDTO": {}}) is None
+
+
+def test_parse_hrv_data() -> None:
+    """Test _parse_hrv_data parses status correctly."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_hrv_data
+
+    # Valid HRV status
+    raw = {"hrvSummary": {"status": "BALANCED"}}
+    assert _parse_hrv_data(raw) == "BALANCED"
+
+    # Missing or invalid payload
+    assert _parse_hrv_data(None) is None
+    assert _parse_hrv_data({}) is None
+
+
+def test_parse_activities() -> None:
+    """Test _parse_activities extracts relevant activity fields."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_activities
+
+    raw = [
+        {
+            "activityId": 12345,
+            "activityName": "Morning Run",
+            "activityType": {"typeKey": "running"},
+            "duration": 1800,
+            "calories": 350.0,
+            "distance": 5000.0,
+        },
+        {
+            "activityId": 12346,
+            "activityName": "Gym Session",
+            "activityType": {"typeKey": "strength_training"},
+            "duration": 2700,
+            "calories": 220.0,
+        },
+    ]
+
+    parsed = _parse_activities(raw)
+    assert len(parsed) == 2
+    assert parsed[0]["activity_id"] == 12345
+    assert parsed[0]["name"] == "Morning Run"
+    assert parsed[0]["type"] == "running"
+    assert parsed[0]["duration_sec"] == 1800
+    assert parsed[0]["calories"] == 350.0
+    assert parsed[0]["distance_m"] == 5000.0
+
+    assert parsed[1]["type"] == "strength_training"
+    assert parsed[1]["duration_sec"] == 2700
+    assert parsed[1]["calories"] == 220.0
+
+    # Empty payload
+    assert _parse_activities(None) == []
+    assert _parse_activities([]) == []
+
+
+def test_parse_weight() -> None:
+    """Test _parse_weight converts grams to kg and handles float/int."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_weight
+
+    # Grams conversion (> 200)
+    assert _parse_weight(72500) == 72.5
+    # Kilograms direct (<= 200)
+    assert _parse_weight(72.5) == 72.5
+    # None or non-numeric
+    assert _parse_weight(None) is None
+    assert _parse_weight("invalid") is None
+
+
+def test_parse_user_summary() -> None:
+    """Test _parse_user_summary extracts metrics correctly."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_user_summary
+
+    raw = {
+        "totalSteps": 10500,
+        "totalDistanceMeters": 7500,
+        "totalKilocalories": 2300,
+        "restingHeartRate": 54,
+        "averageStressLevel": 28,
+        "minHeartRate": 48,
+        "maxHeartRate": 165,
+        "bodyBatteryMinValue": 25,
+        "bodyBatteryMaxValue": 95,
+        "weight": 75000,
+    }
+
+    summary = _parse_user_summary(raw)
+    assert summary["steps"] == 10500
+    assert summary["distance_km"] == 7.5
+    assert summary["total_calories"] == 2300
+    assert summary["resting_hr"] == 54
+    assert summary["avg_stress"] == 28
+    assert summary["body_battery_min"] == 25
+    assert summary["body_battery_max"] == 95
+    assert summary["weight_kg"] == 75.0
+
+
+def test_serialize_session_tokens() -> None:
+    """Test _serialize_session_tokens correctly extracts garth/oauth tokens."""
+    from custom_components.garmin_ha_ai.garmin_client import _serialize_session_tokens
+
+    mock_client = MagicMock()
+    mock_client.garth.dumps.return_value = "serialized_oauth_token"
+
+    result = _serialize_session_tokens(mock_client)
+    assert result == "serialized_oauth_token"
+
+
+
+

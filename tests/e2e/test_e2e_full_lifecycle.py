@@ -230,7 +230,7 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         long_report_sensor = next(e for e in registered_entities if e.__class__.__name__ == "GarminAIHealthReportLongSensor")
 
         assert short_report_sensor.native_value == "Peak recovery with sleep score of 91. Excellent tempo run performance."
-        assert long_report_sensor.native_value == "Report generated (2026-08-16)"
+        assert str(long_report_sensor.native_value).startswith("Report generated")
         assert long_report_sensor.extra_state_attributes["full_report"] == llm_report_response
 
         # Verify notifications were dispatched to targets

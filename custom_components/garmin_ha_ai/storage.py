@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
+import homeassistant.util.dt as dt_util
 
 from .const import (
     LOGGER,
@@ -17,16 +19,23 @@ from .const import (
 
 
 class GarminStorage:
-    """Manages local storage for OAuth tokens and metric history snapshots."""
+    """Manages local storage for OAuth tokens and metric history snapshots.
+
+    Uses Home Assistant's built-in Store helper (homeassistant.helpers.storage.Store)
+    to perform atomic, safe JSON reads/writes in the .storage directory.
+    Employs asyncio locks to prevent race conditions during concurrent coordinator access.
+    """
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize storage helper with HA Store instances and locks."""
+        # Separate storage stores for sensitive OAuth tokens and metrics history
         self._token_store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, STORAGE_KEY_TOKENS
         )
         self._history_store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, STORAGE_KEY_HISTORY
         )
+        # Concurrency locks guaranteeing single-writer consistency
         self._token_lock = asyncio.Lock()
         self._history_lock = asyncio.Lock()
 
@@ -70,19 +79,22 @@ class GarminStorage:
         """Save a single day's metric snapshot into history storage."""
         if not metrics_dict or "date" not in metrics_dict:
             return
+
         async with self._history_lock:
             try:
                 data = await self._history_store.async_load()
                 history = data if isinstance(data, dict) else {}
+                # Index snapshot dictionary by ISO date string (YYYY-MM-DD)
                 history[metrics_dict["date"]] = metrics_dict
                 await self._history_store.async_save(history)
             except Exception as err:
                 LOGGER.warning("Error saving daily metrics snapshot to storage: %s", err)
 
     async def async_prune_history(self, retention_days: int) -> None:
-        """Prune metric history entries older than retention_days."""
-        from datetime import datetime, timedelta, timezone
+        """Prune metric history entries older than retention_days.
 
+        Calculates date cutoff string and removes older entries to keep storage compact.
+        """
         async with self._history_lock:
             history = await self._history_store.async_load()
             if not history or not isinstance(history, dict):
@@ -91,7 +103,6 @@ class GarminStorage:
             days = int(retention_days) if retention_days else 30
             cutoff = None
             try:
-                import homeassistant.util.dt as dt_util
                 now = dt_util.now()
                 if isinstance(getattr(now, "year", None), int) and hasattr(now, "date"):
                     cutoff = (now.date() - timedelta(days=days)).strftime("%Y-%m-%d")
@@ -101,12 +112,15 @@ class GarminStorage:
             if not cutoff or not isinstance(cutoff, str):
                 cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).strftime("%Y-%m-%d")
 
+            # Filter snapshots retaining only dates on or after the cutoff date
             pruned_history = {
                 date_str: metrics
                 for date_str, metrics in history.items()
                 if isinstance(date_str, str) and date_str >= cutoff
             }
+            # Only perform disk write if entries were actually pruned
             if len(pruned_history) != len(history):
                 await self._history_store.async_save(pruned_history)
+
 
 

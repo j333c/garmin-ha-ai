@@ -20,8 +20,10 @@ from .const import (
     SERVICE_ASK_QUESTION,
     SERVICE_GENERATE_REPORT,
 )
+from .helpers import truncate_entity_state
 from .storage import GarminStorage
 
+# Schema definitions for service call payloads
 SERVICE_GENERATE_REPORT_SCHEMA = vol.Schema(
     {
         vol.Optional("entry_id"): cv.string,
@@ -39,13 +41,19 @@ SERVICE_ASK_QUESTION_SCHEMA = vol.Schema(
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Set up custom services for Garmin HA AI integration."""
+    """Set up custom services for Garmin HA AI integration.
+
+    Registers:
+    1. garmin_ha_ai.generate_report: On-demand daily health report generation.
+    2. garmin_ha_ai.ask_question: Interactive Q&A with AI Coach grounded in rolling history.
+    """
 
     async def handle_generate_report(call: ServiceCall) -> None:
         """Handle generate_report service call."""
         domain_data = hass.data.get(DOMAIN, {})
         target_entry_id = call.data.get("entry_id")
 
+        # If entry_id is specified in service call payload, target only that entry
         if target_entry_id:
             entry_data = domain_data.get(target_entry_id)
             if not entry_data or "coordinator" not in entry_data:
@@ -53,13 +61,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             await entry_data["coordinator"].async_generate_report(force=True)
             return
 
+        # Otherwise, trigger report generation across all active Garmin config entries
         for entry_id, entry_data in domain_data.items():
             if isinstance(entry_data, dict) and "coordinator" in entry_data:
                 coordinator = entry_data["coordinator"]
                 await coordinator.async_generate_report(force=True)
 
     async def handle_ask_question(call: ServiceCall) -> ServiceResponse:
-        """Handle ask_question service call with direct response support."""
+        """Handle ask_question service call with direct response support.
+
+        Supports response payloads (SupportsResponse.OPTIONAL) so automations and scripts
+        can capture the AI answer directly in variables or templates.
+        """
         question: str = call.data["question"]
         days_history: int = call.data.get("days_history", 7)
         target_entry_id = call.data.get("entry_id")
@@ -69,6 +82,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError("Garmin HA AI integration is not set up.")
 
         entry_data = None
+        # Locate target or default config entry
         if target_entry_id:
             entry_data = domain_data.get(target_entry_id)
             if not entry_data or "storage" not in entry_data or "coordinator" not in entry_data:
@@ -86,20 +100,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         storage: GarminStorage = entry_data["storage"]
         coordinator = entry_data["coordinator"]
 
-        # Calculate context_days for response payload
+        # Calculate actual available context_days for response payload
         history_dict = await storage.async_load_history()
         context_days = 0
         if isinstance(history_dict, dict) and history_dict:
             clamped_days = max(1, min(days_history, 90))
             context_days = min(clamped_days, len(history_dict))
 
+        # Query the AI provider with historical context
         answer_text = await coordinator.async_ask_question(
             question=question, days_history=days_history
         )
 
+        # If a response_entity is specified, update its state and attributes in HA
         response_entity = call.data.get("response_entity")
         if response_entity:
-            short_val = answer_text[:247] + "..." if len(answer_text) > 250 else answer_text
+            short_val = truncate_entity_state(answer_text, max_len=250)
             hass.states.async_set(
                 response_entity,
                 short_val,
@@ -110,12 +126,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 },
             )
 
+        # Return structured ServiceResponse dictionary
         return {
             "answer": answer_text,
             "question": question,
             "context_days": context_days,
         }
 
+    # Register generate_report service if not already registered
     if not hass.services.has_service(DOMAIN, SERVICE_GENERATE_REPORT):
         hass.services.async_register(
             DOMAIN,
@@ -124,6 +142,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             schema=SERVICE_GENERATE_REPORT_SCHEMA,
         )
 
+    # Register ask_question service with SupportsResponse.OPTIONAL
     if not hass.services.has_service(DOMAIN, SERVICE_ASK_QUESTION):
         hass.services.async_register(
             DOMAIN,
@@ -132,3 +151,4 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             schema=SERVICE_ASK_QUESTION_SCHEMA,
             supports_response=SupportsResponse.OPTIONAL,
         )
+

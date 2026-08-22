@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 
 LOGGER = logging.getLogger(__name__)
 
+# URL and path constants for static custom card registration
 FRONTEND_URL_BASE = "/garmin_ha_ai_frontend"
 FRONTEND_JS_FILE = "garmin-ha-ai-cards.js"
 FRONTEND_URL = f"{FRONTEND_URL_BASE}/{FRONTEND_JS_FILE}"
@@ -16,6 +17,7 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_FILE_PATH = FRONTEND_DIR / FRONTEND_JS_FILE
 MANIFEST_PATH = Path(__file__).parent / "manifest.json"
 
+# Extract component version for cache-busting query parameter in Lovelace
 VERSION = "0.5.0-rc2"
 if MANIFEST_PATH.exists():
     try:
@@ -30,7 +32,14 @@ _FRONTEND_REGISTERED = False
 
 
 async def async_setup_frontend(hass: HomeAssistant) -> None:
-    """Register static path and extra JS URL for custom Lovelace cards."""
+    """Register static path and extra JS URL for custom Lovelace cards.
+
+    Executes a 4-step pipeline:
+    1. Static HTTP path endpoint registration (/garmin_ha_ai_frontend/garmin-ha-ai-cards.js).
+    2. Fallback copy to /config/www directory if present.
+    3. Registering extra JS URL via add_extra_js_url for automatic frontend loading.
+    4. Auto-registering module in Lovelace Resources storage if available.
+    """
     global _FRONTEND_REGISTERED
 
     if _FRONTEND_REGISTERED:
@@ -109,3 +118,4 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
                     LOGGER.debug("Auto-registered Garmin HA AI cards in Lovelace resources")
     except Exception as err:
         LOGGER.debug("Lovelace resources auto-registration skipped: %s", err)
+
