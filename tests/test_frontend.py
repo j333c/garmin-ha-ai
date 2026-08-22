@@ -44,6 +44,8 @@ async def test_frontend_js_file_exists_and_contains_custom_cards():
 
     # Check Base class and visual editor hook
     assert "class GarminCardBase extends HTMLElement" in content
+    assert "_parseNumericState(entityId)" in content
+    assert "_handleCallService(domain, service, serviceData)" in content
     assert "smartFindEntity" in content
     assert "getConfigElement()" in content
     assert "getStubConfig(hass)" in content

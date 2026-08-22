@@ -152,10 +152,29 @@
    */
   function smartFindEntity(hass, patterns, domain = "sensor") {
     if (!hass || !hass.states) return "";
+    if (typeof patterns === "string" && (Array.isArray(domain) || typeof domain === "string")) {
+      // Handle swapped arguments: (hass, "sensor", ["pattern1", "pattern2"])
+      if (Array.isArray(domain)) {
+        const temp = patterns;
+        patterns = domain;
+        domain = temp;
+      } else if (!domain.includes(".")) {
+        const temp = patterns;
+        patterns = [domain];
+        domain = temp;
+      }
+    }
+    if (typeof patterns === "string") {
+      patterns = [patterns];
+    }
+    if (!Array.isArray(patterns)) {
+      return "";
+    }
     const prefix = `${domain}.`;
     const entityIds = Object.keys(hass.states).filter((id) => id.startsWith(prefix));
 
     for (const pattern of patterns) {
+      if (!pattern) continue;
       // 1. Exact match
       if (hass.states[pattern]) return pattern;
       if (hass.states[`${prefix}${pattern}`]) return `${prefix}${pattern}`;
@@ -525,6 +544,28 @@
       if (!this._hass || !this._hass.states || !entityId) return fallback;
       const s = this._hass.states[entityId];
       return s && s.attributes && s.attributes[attrName] !== undefined ? s.attributes[attrName] : fallback;
+    }
+
+    _parseNumericState(entityId) {
+      if (!this._hass || !this._hass.states || !entityId) return null;
+      const s = this._hass.states[entityId];
+      if (!s || s.state === "unavailable" || s.state === "unknown") return null;
+      const num = parseFloat(s.state);
+      return isNaN(num) ? null : num;
+    }
+
+    _updateContent() {
+      // Default no-op; overridden by specific card implementations
+    }
+
+    async _handleCallService(domain, service, serviceData) {
+      if (!this._hass) return null;
+      try {
+        return await this._hass.callService(domain, service, serviceData, undefined, true, true);
+      } catch (err) {
+        console.error(`Error calling service ${domain}.${service}:`, err);
+        return null;
+      }
     }
   }
 
@@ -1391,7 +1432,24 @@
     constructor() {
       super();
       this._activeTab = "summary";
-      this._chatHistory = [];
+      this._directAnswer = null;
+      this._chatLoading = false;
+    }
+
+    _getDefaultConfig() {
+      return {
+        type: "custom:garmin-ha-ai-card",
+        title: "Garmin AI Coach",
+        sleep_entity: "",
+        battery_entity: "",
+        stress_entity: "",
+        hrv_entity: "",
+        hr_entity: "",
+        steps_entity: "",
+        short_report_entity: "",
+        long_report_entity: "",
+        answer_entity: "",
+      };
     }
 
     static getConfigElement() {
@@ -1402,28 +1460,30 @@
       return {
         type: "custom:garmin-ha-ai-card",
         title: "Garmin AI Coach",
-        sleep_entity: smartFindEntity(hass, "sensor", ["sleep_score", "garmin_sleep_score"]),
-        battery_entity: smartFindEntity(hass, "sensor", ["body_battery", "garmin_body_battery"]),
-        stress_entity: smartFindEntity(hass, "sensor", ["avg_stress", "garmin_stress"]),
-        hrv_entity: smartFindEntity(hass, "sensor", ["hrv_status", "garmin_hrv"]),
-        hr_entity: smartFindEntity(hass, "sensor", ["resting_hr", "garmin_resting_heart_rate"]),
-        steps_entity: smartFindEntity(hass, "sensor", ["steps", "garmin_steps"]),
-        short_report_entity: smartFindEntity(hass, "sensor", ["ai_health_report_short", "health_report_short"]),
-        long_report_entity: smartFindEntity(hass, "sensor", ["ai_health_report_long", "health_report_long"]),
-        generate_button_entity: smartFindEntity(hass, "button", ["generate_report", "generate_ai_health_report"]),
-        question_entity: smartFindEntity(hass, "text", ["question_input", "garmin_ai_question"]),
-        ask_button_entity: smartFindEntity(hass, "button", ["ask_question", "ask_ai_question"]),
-        answer_entity: smartFindEntity(hass, "sensor", ["ai_last_answer", "last_answer"]),
+        sleep_entity: smartFindEntity(hass, ["garmin_sleep_score", "sleep_score", "sleep"], "sensor"),
+        battery_entity: smartFindEntity(hass, ["garmin_body_battery", "body_battery"], "sensor"),
+        stress_entity: smartFindEntity(hass, ["garmin_stress_level", "stress_level", "avg_stress", "garmin_stress"], "sensor"),
+        hrv_entity: smartFindEntity(hass, ["garmin_hrv_status", "hrv_status", "garmin_hrv"], "sensor"),
+        hr_entity: smartFindEntity(hass, ["garmin_resting_heart_rate", "resting_heart_rate", "resting_hr"], "sensor"),
+        steps_entity: smartFindEntity(hass, ["garmin_steps", "daily_steps", "steps", "total_steps"], "sensor"),
+        short_report_entity: smartFindEntity(hass, ["garmin_ai_health_report_short", "health_report_short"], "sensor"),
+        long_report_entity: smartFindEntity(hass, ["garmin_ai_health_report_long", "health_report_long"], "sensor"),
+        generate_button_entity: smartFindEntity(hass, ["garmin_ai_generate_report", "generate_report"], "button"),
+        question_entity: smartFindEntity(hass, ["garmin_ai_question", "question_input"], "text"),
+        ask_button_entity: smartFindEntity(hass, ["garmin_ai_ask_question", "ask_question"], "button"),
+        answer_entity: smartFindEntity(hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor"),
       };
     }
 
     _renderCircularGauge(value, maxVal, label, unit, color) {
       const radius = 24;
       const stroke = 4;
-      const num = typeof value === "number" ? Math.max(0, Math.min(value, maxVal)) : 0;
       const circumference = 2 * Math.PI * radius;
-      const offset = circumference - (num / maxVal) * circumference;
-      const displayVal = value !== null && value !== undefined && !isNaN(value) ? `${value}${unit}` : "--";
+      const isNum = typeof value === "number" && !isNaN(value);
+      const num = isNum ? Math.max(0, Math.min(value, maxVal)) : 0;
+      const offset = isNum ? circumference - (num / maxVal) * circumference : circumference;
+      const displayVal = isNum ? `${value}${unit}` : "--";
+      const displayColor = isNum ? color : "rgba(128, 128, 128, 0.4)";
 
       return `
         <div class="garmin-gauge-item">
@@ -1431,25 +1491,30 @@
             <svg class="garmin-gauge-svg" width="60" height="60" viewBox="0 0 60 60">
               <circle class="garmin-gauge-bg" cx="30" cy="30" r="${radius}" stroke-width="${stroke}" />
               <circle class="garmin-gauge-fill" cx="30" cy="30" r="${radius}" stroke-width="${stroke}"
-                stroke="${color}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" />
+                stroke="${displayColor}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" />
             </svg>
-            <div class="garmin-gauge-center-val" style="color:${color}">${displayVal}</div>
+            <div class="garmin-gauge-center-val" style="color:${displayColor}">${displayVal}</div>
           </div>
           <div class="garmin-gauge-label">${label}</div>
         </div>
       `;
     }
 
+    _updateContent() {
+      if (!this._initialized) return;
+      this._render();
+    }
+
     _render() {
       if (!this.shadowRoot) return;
 
-      const title = this._config.title || "Garmin AI Coach";
-      const sleepEnt = this._config.sleep_entity || smartFindEntity(this._hass, "sensor", ["sleep_score"]);
-      const battEnt = this._config.battery_entity || smartFindEntity(this._hass, "sensor", ["body_battery"]);
-      const stressEnt = this._config.stress_entity || smartFindEntity(this._hass, "sensor", ["avg_stress"]);
-      const hrvEnt = this._config.hrv_entity || smartFindEntity(this._hass, "sensor", ["hrv_status"]);
-      const hrEnt = this._config.hr_entity || smartFindEntity(this._hass, "sensor", ["resting_hr"]);
-      const stepsEnt = this._config.steps_entity || smartFindEntity(this._hass, "sensor", ["steps"]);
+      const title = this._config?.title || "Garmin AI Coach";
+      const sleepEnt = this._config?.sleep_entity || smartFindEntity(this._hass, ["garmin_sleep_score", "sleep_score", "sleep"], "sensor");
+      const battEnt = this._config?.battery_entity || smartFindEntity(this._hass, ["garmin_body_battery", "body_battery"], "sensor");
+      const stressEnt = this._config?.stress_entity || smartFindEntity(this._hass, ["garmin_stress_level", "stress_level", "avg_stress", "garmin_stress"], "sensor");
+      const hrvEnt = this._config?.hrv_entity || smartFindEntity(this._hass, ["garmin_hrv_status", "hrv_status", "garmin_hrv"], "sensor");
+      const hrEnt = this._config?.hr_entity || smartFindEntity(this._hass, ["garmin_resting_heart_rate", "resting_heart_rate", "resting_hr"], "sensor");
+      const stepsEnt = this._config?.steps_entity || smartFindEntity(this._hass, ["garmin_steps", "daily_steps", "steps", "total_steps"], "sensor");
 
       const sleepVal = this._parseNumericState(sleepEnt);
       const battVal = this._parseNumericState(battEnt);
@@ -1460,21 +1525,21 @@
       const hrvState = hrvEnt && this._hass?.states ? this._hass.states[hrvEnt] : undefined;
       const hrvVal = hrvState && hrvState.state !== "unavailable" && hrvState.state !== "unknown" ? hrvState.state : "BALANCED";
 
-      const sleepColor = sleepVal >= 80 ? "#10B981" : sleepVal >= 60 ? "#F59E0B" : "#EF4444";
-      const battColor = battVal >= 60 ? "#10B981" : battVal >= 30 ? "#F59E0B" : "#EF4444";
-      const stressColor = stressVal <= 25 ? "#10B981" : stressVal <= 50 ? "#F59E0B" : "#EF4444";
+      const sleepColor = sleepVal !== null ? (sleepVal >= 80 ? "#10B981" : sleepVal >= 60 ? "#F59E0B" : "#EF4444") : "rgba(128,128,128,0.4)";
+      const battColor = battVal !== null ? (battVal >= 60 ? "#10B981" : battVal >= 30 ? "#F59E0B" : "#EF4444") : "rgba(128,128,128,0.4)";
+      const stressColor = stressVal !== null ? (stressVal <= 25 ? "#10B981" : stressVal <= 50 ? "#F59E0B" : "#EF4444") : "rgba(128,128,128,0.4)";
 
-      const shortEnt = this._config.short_report_entity || smartFindEntity(this._hass, "sensor", ["ai_health_report_short"]);
-      const longEnt = this._config.long_report_entity || smartFindEntity(this._hass, "sensor", ["ai_health_report_long"]);
+      const shortEnt = this._config?.short_report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_short", "health_report_short"], "sensor");
+      const longEnt = this._config?.long_report_entity || smartFindEntity(this._hass, ["garmin_ai_health_report_long", "health_report_long"], "sensor");
       const shortState = shortEnt && this._hass?.states ? this._hass.states[shortEnt] : undefined;
       const longState = longEnt && this._hass?.states ? this._hass.states[longEnt] : undefined;
 
       const summaryText = shortState?.attributes?.full_report || shortState?.attributes?.short_summary || shortState?.state || "No daily summary generated yet.";
       const fullReportText = longState?.attributes?.full_report || longState?.attributes?.short_summary || longState?.state || "No full report generated yet.";
 
-      const ansEnt = this._config.answer_entity || smartFindEntity(this._hass, "sensor", ["ai_last_answer"]);
+      const ansEnt = this._config?.answer_entity || smartFindEntity(this._hass, ["garmin_ai_last_answer", "ai_last_answer", "last_answer"], "sensor");
       const ansState = ansEnt && this._hass?.states ? this._hass.states[ansEnt] : undefined;
-      const ansText = ansState?.attributes?.full_answer || ansState?.state || "";
+      const ansText = this._directAnswer?.answer || ansState?.attributes?.full_answer || ansState?.state || "";
 
       this.shadowRoot.innerHTML = `
         <style>
@@ -1512,7 +1577,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s, transform 0.2s;
+            transition: background 0.2s, transform 0.3s ease;
           }
           .garmin-refresh-btn:hover {
             background: rgba(3, 169, 244, 0.1);
@@ -1716,7 +1781,7 @@
             </div>
             <div class="garmin-chat-input-row">
               <input type="text" class="garmin-chat-input" id="chatInput" placeholder="Ask your health coach anything..." />
-              <button class="garmin-chat-btn" id="chatSubmit">Ask</button>
+              <button class="garmin-chat-btn" id="chatSubmit"${this._chatLoading ? " disabled" : ""}>${this._chatLoading ? "Thinking..." : "Ask"}</button>
             </div>
             ${ansText && ansText !== "unavailable" ? `
               <div class="garmin-chat-answer">
@@ -1738,8 +1803,17 @@
       const chatSubmit = this.shadowRoot.getElementById("chatSubmit");
 
       if (refreshBtn) {
-        refreshBtn.addEventListener("click", () => {
-          this._handleCallService("garmin_ha_ai", "generate_report", {});
+        refreshBtn.addEventListener("click", async () => {
+          refreshBtn.style.transform = "rotate(180deg)";
+          try {
+            await this._handleCallService("garmin_ha_ai", "generate_report", {});
+          } catch (err) {
+            console.error("Generate Report error:", err);
+          } finally {
+            setTimeout(() => {
+              if (refreshBtn) refreshBtn.style.transform = "none";
+            }, 500);
+          }
         });
       }
 
@@ -1757,11 +1831,23 @@
         });
       }
 
-      const sendQuestion = () => {
+      const sendQuestion = async () => {
         const q = chatInput?.value?.trim();
-        if (!q) return;
-        this._handleCallService("garmin_ha_ai", "ask_question", { question: q });
-        if (chatInput) chatInput.value = "";
+        if (!q || !this._hass) return;
+        this._chatLoading = true;
+        this._updateContent();
+
+        try {
+          const response = await this._handleCallService("garmin_ha_ai", "ask_question", { question: q });
+          if (response && response.response && response.response.answer) {
+            this._directAnswer = response.response;
+          }
+        } catch (err) {
+          console.error("Ask Question error:", err);
+        } finally {
+          this._chatLoading = false;
+          this._updateContent();
+        }
       };
 
       if (chatSubmit) {
@@ -1908,7 +1994,7 @@
   }
 
   console.info(
-    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.6.0) ",
+    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.6.1) ",
     "color: white; background: #03a9f4; font-weight: 700; border-radius: 3px 0 0 3px;",
     "color: #03a9f4; background: rgba(3, 169, 244, 0.1); font-weight: 700; border-radius: 0 3px 3px 0;"
   );
