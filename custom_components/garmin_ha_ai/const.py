@@ -10,7 +10,7 @@ LOGGER: logging.Logger = logging.getLogger(__package__)
 
 DOMAIN: Final[str] = "garmin_ha_ai"
 DEFAULT_NAME: Final[str] = "Garmin HA AI"
-VERSION: Final[str] = "0.6.1"
+VERSION: Final[str] = "0.6.5-rc1"
 
 PLATFORMS: Final[list[Platform]] = [
     Platform.SENSOR,

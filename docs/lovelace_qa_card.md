@@ -4,19 +4,38 @@ This document describes how to set up an interactive AI Health Coach Q&A interfa
 
 ---
 
-## 🏗️ Architecture: Zero-Helper Setup
+## 🏗️ Architecture: Zero-Helper Setup & Grounded RAG
 
-The interactive Q&A feature works directly with native entities provided by `garmin-ha-ai`, eliminating the need to create manual Home Assistant helpers (`input_text`, scripts, etc.):
+The interactive Q&A feature grounds AI responses in your **rolling historical metrics (1 to 90 days)**, user fitness targets, and coaching directives. It works directly with native entities provided by `garmin-ha-ai`, eliminating the need to create manual Home Assistant helpers (`input_text`, scripts, etc.):
 
 1. **Question Input**: `text.garmin_ai_question` (native text entity for typing queries).
 2. **Action Trigger**: `button.garmin_ai_ask_question` (submits the typed question to your configured AI provider).
 3. **Response Display**: `sensor.garmin_ai_last_answer` (attributes `full_answer`, `question`, and `timestamp`).
+4. **Service Return**: Service `garmin_ha_ai.ask_question` returns response data directly (`SupportsResponse.OPTIONAL`) and supports targeted execution via `entry_id`.
 
 ---
 
 ## 📋 Recommended Dashboard Configurations
 
-### Pattern 1: Streamlined Q&A Card (All-in-One)
+### Pattern 0: Packaged Native Lovelace Cards (Recommended / 1-Click Setup)
+
+No YAML or manual helpers required! Use the integration's built-in custom cards:
+
+```yaml
+# Complete Card with Circular Gauges and Expandable Q&A Chat Drawer
+type: custom:garmin-ha-ai-card
+title: 🤖 Garmin AI Health Coach
+```
+
+```yaml
+# Dedicated Standalone Q&A Chat Card
+type: custom:garmin-ha-ai-qa-card
+title: 💬 Garmin AI Coach Q&A
+```
+
+---
+
+### Pattern 1: Streamlined Standard HA Q&A Card (Classic Stack)
 
 This card gives you a clean input field, submit button, and a resizable Markdown response box:
 

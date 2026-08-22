@@ -45,7 +45,9 @@ Once added, you can customize polling, AI models, custom endpoints, coaching sty
 | **Fitness Goals & Milestones** | *Blank* | Your personal athletic objectives (e.g., *"Half-marathon under 1:45, build aerobic base"*). |
 | **Coaching Directives & Tone** | *Blank* | Personality instructions for the AI coach (e.g., *"Be direct and analytical. Prioritize recovery and sleep quality over high mileage."*). |
 | **Notification Target Service** | *Blank* | Comma-separated Home Assistant notify services (e.g., `notify.mobile_app_my_phone, notify.persistent_notification`). |
-| **Daily Briefing Schedule** | `06:00:00` | Time of day (`HH:MM:SS`) to automatically pull data, generate the daily briefing, and send notifications. |
+| **Polling Schedule Mode** | `Daily Fixed Time` | Mode selection: `Daily Fixed Time` (fixed morning run) or `Periodic Interval` (every 1, 3, 6, 12, or 24 hours). |
+| **Daily Briefing Schedule** | `06:00:00` | Time of day (`HH:MM:SS`) for daily extraction when in Fixed Time mode. |
+| **Periodic Polling Interval** | `24` | Hours between syncs when in Interval mode (1, 3, 6, 12, 24). |
 | **AI Provider** | `Google Gemini` | Radio button selection: `Google Gemini` or `OpenAI (or compatible)`. |
 | **AI Model Name** | `gemini-2.5-flash` / `gpt-4o` | Dynamic dropdown populated via API model discovery (e.g., `gemini-2.5-flash`, `gpt-4o`, `gpt-4o-mini`, `llama3.3:70b`, `mistral:latest`), with support for custom typed model names. |
 | **Custom AI Base URL** | `https://api.openai.com/v1` | Custom endpoint URL for local/alternative OpenAI-compatible APIs (e.g., `http://192.168.1.100:11434/v1` for Ollama, LocalAI, vLLM). |
@@ -77,11 +79,15 @@ You can test data polling and AI generation manually via **Developer Tools**:
 
 ## Step 5: Add Lovelace Dashboard Cards
 
-The integration provides ready-to-use entities for a complete 3-tier health dashboard (Fast Health Glance, Instant Q&A Coach, and Deep Insight Report).
+The integration automatically registers **4 native Lovelace custom cards** directly into Home Assistant's UI Card Picker (`+ Add Card` → search for **Garmin AI**):
+* **`custom:garmin-ha-ai-card`**: Complete All-in-One card with animated circular SVG gauges, Summary/Deep Report tabs, and embedded Q&A chat drawer.
+* **`custom:garmin-ha-ai-qa-card`**: Dedicated interactive Q&A coach chat card.
+* **`custom:garmin-ha-ai-report-card`**: Detailed daily health report viewer.
+* **`custom:garmin-ha-ai-overview-card`**: Health & recovery overview with quick metrics.
 
 > 💡 For complete full-dashboard presets for both modern **Sections** and **Classic** views, see the [**Lovelace Dashboard Guide**](dashboard_cards.md).
 
-### Quick-Start Lovelace YAML Stack
+### Quick-Start Lovelace YAML Stack (Standard HA Cards)
 
 ```yaml
 type: vertical-stack

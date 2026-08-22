@@ -4,7 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.6.1-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.5--rc1-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
 
 A privacy-first, subscription-free **Home Assistant custom integration** that pulls your daily health and performance metrics from **Garmin Connect** and delivers personalized, context-aware AI coaching briefings and interactive health intelligence.
 
@@ -51,6 +51,10 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 * [**Installation Guide**](docs/installation.md) — Detailed HACS and manual installation steps.
 * [**First Steps & Configuration**](docs/first_steps.md) — Initial setup, AI provider selection, and dashboard setup.
 * [**Lovelace Dashboard Guide**](docs/dashboard_cards.md) — Dashboard cards, interactive Q&A setups, and full YAML examples.
+* [**Interactive Q&A Guide**](docs/lovelace_qa_card.md) — Interactive AI coaching questions and chat drawer setup.
+* [**7-Day Trend Analytics**](docs/analytics_and_trends.md) — Pre-computed mathematical baselines and activity HR zones.
+* [**Multi-Account Guide**](docs/multi_account_support.md) — Multi-user household isolation and per-entry scoping.
+* [**Error Handling & Localization**](docs/error_handling_and_localization.md) — Error taxonomy and German/English translations.
 * [**Troubleshooting Guide**](docs/troubleshooting.md) — Diagnosing Garmin MFA, rate limits (429), local AI connectivity, and logs.
 * [**Frequently Asked Questions (FAQ)**](docs/faq.md) — Common questions, architecture details, and local model guidance.
 
@@ -91,6 +95,7 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 | `sensor.garmin_stress_level` | Garmin Stress Level | - | Average daily stress score (0–100). |
 | `sensor.garmin_resting_heart_rate` | Garmin Resting HR | `bpm` | Daily resting heart rate. |
 | `sensor.garmin_weight` | Garmin Weight | `kg` | Latest logged body weight. |
+| `sensor.garmin_hrv_status` | Garmin HRV Status | `text` | Overnight Heart Rate Variability status (e.g. Balanced, Unbalanced). |
 | `sensor.garmin_ai_health_report_short` | AI Health Report (Short) | `text` | 1–2 sentence actionable summary for notifications/glance cards. |
 | `sensor.garmin_ai_health_report_long` | AI Health Report (Long) | `text` | Status overview with full multi-section Markdown report in attributes. |
 | `sensor.garmin_ai_last_answer` | AI Last Answer | `text` | Truncated response to the last interactive Q&A question asked. |
@@ -118,6 +123,10 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 ### `garmin_ha_ai.generate_report`
 Manually triggers Garmin metric extraction, history update, AI report generation, and notification dispatch.
 
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `entry_id` | `string` | No | Optional config entry ID to target a specific Garmin account. If omitted, triggers all accounts. |
+
 ```yaml
 action: garmin_ha_ai.generate_report
 ```
@@ -130,6 +139,7 @@ Asks your personal AI Health Coach a personalized question grounded in your roll
 | `question` | `string` | **Yes** | - | The health, fitness, or workout coaching question to ask. |
 | `days_history` | `number` | No | `7` | Days of historical context to provide (1–90). |
 | `response_entity` | `entity_id` | No | - | Optional target sensor entity to write the answer into. |
+| `entry_id` | `string` | No | - | Optional config entry ID to target a specific Garmin account. |
 
 #### Service Call Example:
 ```yaml

@@ -16,6 +16,9 @@ No! There are **no subscriptions, cloud relays, or SaaS middlemen**. You can use
 ### Is my Garmin password stored securely?
 Yes. Your password is only used in memory during setup or re-authentication to obtain Garmin OAuth session tokens. Tokens are securely persisted in Home Assistant's local `.storage` directory. Plaintext passwords are **never** written to disk.
 
+### Can my partner and I both connect our Garmin watches to Home Assistant?
+Yes! The integration natively supports **multi-account households**. Simply go to **Settings → Devices & Services → + Add Integration** and add a second Garmin HA AI instance. Each account operates with strict storage isolation (`.storage/garmin_ha_ai_tokens_{entry_id}.json`), separate device profiles, independent goals/directives, and custom dashboard cards.
+
 ---
 
 ## 🤖 AI Models & Customization
@@ -51,10 +54,29 @@ Yes! In **Options Flow**, enter custom **Coaching Directives & Tone**. For examp
 * **Daily Steps & Distance** (km)
 * **Total Calories & Active Calories** (kcal)
 * **Weight** (kg)
-* **Logged Activities & Workouts** (Type, duration, calories burned)
+* **Logged Activities & Workouts** (Type, duration, calories burned, HR zones, aerobic/anaerobic training effects)
 
 ### Why is the short report sensor truncated?
 Home Assistant strictly enforces a **255-character hard limit** on all entity state values. `sensor.garmin_ai_health_report_short` is safely capped under 250 characters for clean glance cards and mobile notifications. The complete, detailed multi-section Markdown report is preserved in full within `extra_state_attributes["full_report"]` on `sensor.garmin_ai_health_report_long`.
+
+---
+
+## 🔄 Polling & Schedules
+
+### How do I change how often Garmin is polled?
+In **Options Flow**, you can choose between:
+1. **Daily Fixed Time**: Select your preferred morning time (e.g. `06:30:00`) using the time picker.
+2. **Periodic Interval**: Choose an hourly interval (every `1`, `3`, `6`, `12`, or `24` hours).
+
+---
+
+## 💬 Interactive Q&A Coach
+
+### How do I ask questions to the AI Health Coach?
+You can ask coaching questions anytime in 3 ways:
+1. **Using the Custom Card**: Type directly into the chat drawer on `custom:garmin-ha-ai-card` or `custom:garmin-ha-ai-qa-card`.
+2. **Using Native Entities**: Type into `text.garmin_ai_question` and press `button.garmin_ai_ask_question`.
+3. **Using Home Assistant Action**: Call `garmin_ha_ai.ask_question` from Developer Tools or automations.
 
 ---
 
@@ -71,8 +93,8 @@ Yes! Call the `garmin_ha_ai.generate_report` action at any time in an automation
 ## 🎨 Lovelace Cards
 
 ### Where do I find the dashboard cards?
-The integration automatically registers custom cards in Home Assistant's card picker:
+The integration automatically registers 4 custom cards in Home Assistant's card picker:
 1. Open your Lovelace dashboard.
 2. Click **Add Card** (bottom right).
-3. Search for **Garmin AI** to find the **Overview Card**, **Q&A Coach Card**, and **Report Card**.
+3. Search for **Garmin AI** to find the **Complete Card (`custom:garmin-ha-ai-card`)**, **Overview Card**, **Q&A Coach Card**, and **Report Card**.
 4. See the [**Lovelace Dashboard Guide**](dashboard_cards.md) for full YAML and layout options.

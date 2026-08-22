@@ -6,7 +6,7 @@ This guide provides both **built-in 1-click UI custom cards** and **copy-and-pas
 
 ## 🚀 Built-in UI Custom Cards (Zero Configuration / Card Picker)
 
-The integration automatically registers 3 native Lovelace custom cards with Home Assistant. You can add them directly from the Home Assistant UI without writing any YAML:
+The integration automatically registers 4 native Lovelace custom cards with Home Assistant. You can add them directly from the Home Assistant UI without writing any YAML:
 
 1. On your Dashboard, click **⋮ (Top right)** → **Edit Dashboard**.
 2. Click **+ Add Card**.
@@ -14,14 +14,21 @@ The integration automatically registers 3 native Lovelace custom cards with Home
 
 | Card Name | Card Type | Description |
 | :--- | :--- | :--- |
-| **Garmin AI Coach Q&A** | `custom:garmin-ha-ai-qa-card` | Text input field, Ask button, loading indicator, and live formatted AI answer view. |
-| **Garmin AI Health Report** | `custom:garmin-ha-ai-report-card` | Full daily health report with on-demand regenerate button, view tabs (Full / Summary / Dynamic), and formatted Markdown viewer. |
-| **Garmin AI Health Overview** | `custom:garmin-ha-ai-overview-card` | All-in-one card featuring glance metrics (Sleep, Battery, Stress, HR, Steps), daily focus banner, and interactive Q&A/Report tabs. |
+| **Garmin AI Complete Card** | `custom:garmin-ha-ai-card` | **Flagship All-in-One Card**: Animated circular SVG gauges (Body Battery, Sleep, Stress, HRV, Resting HR, Steps), Executive Daily Summary & Deep Report Markdown tabs, and expandable interactive Q&A chat drawer. |
+| **Garmin AI Coach Q&A** | `custom:garmin-ha-ai-qa-card` | Dedicated interactive text input field, Ask button, loading spinner, and live formatted AI answer stream. |
+| **Garmin AI Health Report** | `custom:garmin-ha-ai-report-card` | Full daily health report viewer with on-demand regenerate button, view tabs (Full / Summary / Dynamic), and Markdown viewer. |
+| **Garmin AI Health Overview** | `custom:garmin-ha-ai-overview-card` | Glance metrics (Sleep, Battery, Stress, HR, Steps), daily focus banner, and interactive Q&A/Report tabs. |
 
 ### Quick YAML for Built-in Cards:
 
 ```yaml
-# Instant Q&A Coach Card
+# Flagship All-in-One Card (Gauges + Tabs + Embedded Q&A Chat)
+type: custom:garmin-ha-ai-card
+title: 🤖 Garmin AI Health Coach
+```
+
+```yaml
+# Dedicated Instant Q&A Coach Card
 type: custom:garmin-ha-ai-qa-card
 title: Garmin AI Coach Q&A
 ```
@@ -33,9 +40,30 @@ title: Garmin AI Health Report
 ```
 
 ```yaml
-# All-in-One Overview Card
+# Fast Health & Recovery Overview Card
 type: custom:garmin-ha-ai-overview-card
-title: Garmin AI Health Coach
+title: Garmin AI Health Overview
+```
+
+### Multi-Account Card Configuration
+
+When using multiple Garmin Connect accounts in a single Home Assistant instance, specify explicit entity IDs in the card YAML to bind the card to a specific member:
+
+```yaml
+type: custom:garmin-ha-ai-card
+title: 🏃 Jens's Garmin AI Coach
+sleep_score_entity: sensor.garmin_sleep_score_2
+body_battery_entity: sensor.garmin_body_battery_2
+stress_entity: sensor.garmin_stress_level_2
+hrv_entity: sensor.garmin_hrv_status_2
+resting_hr_entity: sensor.garmin_resting_heart_rate_2
+steps_entity: sensor.garmin_steps_2
+short_report_entity: sensor.garmin_ai_health_report_short_2
+long_report_entity: sensor.garmin_ai_health_report_long_2
+last_answer_entity: sensor.garmin_ai_last_answer_2
+question_entity: text.garmin_ai_question_2
+ask_button_entity: button.garmin_ai_ask_question_2
+generate_button_entity: button.garmin_ai_generate_report_2
 ```
 
 ---

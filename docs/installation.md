@@ -12,8 +12,8 @@ Before installing, ensure you have:
 2. **Garmin Connect Account**: Active Garmin credentials (email and password).
    * *Note: If Two-Factor Authentication (MFA) is enabled on your Garmin account, have your email/authenticator app ready during setup.*
 3. **AI Engine Provider**:
-   * **Google Gemini**: A free or paid API key from [Google AI Studio](https://aistudio.google.com/). *(Recommended: `gemini-2.0-flash`)*
-   * **OpenAI or OpenAI-Compatible Endpoint**: An API key from [OpenAI](https://platform.openai.com/) or a local OpenAI-compatible endpoint (e.g., Ollama, LocalAI, vLLM, LM Studio, Groq).
+    * **Google Gemini**: A free or paid API key from [Google AI Studio](https://aistudio.google.com/). *(Recommended: `gemini-2.5-flash`)*
+    * **OpenAI or OpenAI-Compatible Endpoint**: An API key from [OpenAI](https://platform.openai.com/) or a local OpenAI-compatible endpoint (e.g., Ollama, LocalAI, vLLM, LM Studio, Groq).
 
 ---
 
@@ -64,20 +64,30 @@ If you do not use HACS or prefer manual installation:
              ├── coordinator.py
              ├── config_flow.py
              ├── options_flow.py
+             ├── analytics.py
              ├── garmin_client.py
              ├── storage.py
              ├── sensor.py
+             ├── button.py
+             ├── select.py
+             ├── text.py
              ├── services.py
              ├── services.yaml
              ├── models.py
+             ├── exceptions.py
+             ├── frontend.py
+             ├── frontend/
+             │   └── garmin-ha-ai-cards.js
              ├── ai_engine/
              │   ├── __init__.py
              │   ├── base.py
              │   ├── gemini.py
              │   ├── openai.py
              │   └── prompt.py
+             ├── strings.json
              └── translations/
-                 └── en.json
+                 ├── en.json
+                 └── de.json
      ```
 
 4. **Restart Home Assistant**:
@@ -85,12 +95,14 @@ If you do not use HACS or prefer manual installation:
 
 ---
 
-## Verifying the Installation
-
 ## Next Steps & Documentation
 
 * [First Steps & Getting Started](first_steps.md) — Initial configuration, goal setting, and provider options.
 * [Lovelace Dashboard Guide](dashboard_cards.md) — Card picker, overview cards, and Lovelace YAML examples.
+* [Interactive Q&A Guide](lovelace_qa_card.md) — Ask AI coaching questions directly from dashboards and automations.
+* [7-Day Trend Analytics](analytics_and_trends.md) — Deterministic baseline engine and HR zone distributions.
+* [Multi-Account Support](multi_account_support.md) — Multi-member profiles and credential isolation.
+* [Error Handling & Localization](error_handling_and_localization.md) — Exception taxonomy, 429 resilience, and translations.
 * [Troubleshooting Guide](troubleshooting.md) — Solutions for MFA, 429 rate limits, local AI setups, and logs.
 * [Frequently Asked Questions (FAQ)](faq.md) — Architecture, privacy, supported models, and common questions.
 
