@@ -6,6 +6,29 @@ from typing import Any
 
 
 @dataclass
+class GarminActivity:
+    """Class representing an activity recorded on Garmin Connect."""
+
+    activity_id: int | str | None = None
+    name: str | None = None
+    type: str | None = None
+    duration_sec: float | int | None = None
+    duration_min: float | None = None
+    distance_m: float | None = None
+    distance_km: float | None = None
+    calories: int | None = None
+    avg_hr: int | None = None
+    max_hr: int | None = None
+    aerobic_training_effect: float | None = None
+    anaerobic_training_effect: float | None = None
+    hr_zones: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert activity to dictionary representation."""
+        return asdict(self)
+
+
+@dataclass
 class GarminDailyMetrics:
     """Class representing normalized daily fitness and health metrics from Garmin Connect."""
 
@@ -40,4 +63,3 @@ class AIHealthReport:
     def to_dict(self) -> dict[str, Any]:
         """Convert health report dataclass to dictionary representation."""
         return asdict(self)
-

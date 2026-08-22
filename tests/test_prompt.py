@@ -167,3 +167,50 @@ def test_format_daily_metrics_block_duration_type_safety() -> None:
     assert "* Yoga: N/A min, 80 kcal" in block
 
 
+def test_format_daily_metrics_block_rich_activity_metrics() -> None:
+    """Test formatting daily metrics with rich HR stats and training effects."""
+    metrics = GarminDailyMetrics(
+        date="2026-08-15",
+        activities=[
+            {
+                "activity_type": "Running",
+                "duration_min": 45.0,
+                "calories": 480,
+                "distance_km": 8.0,
+                "avg_hr": 155,
+                "max_hr": 175,
+                "aerobic_training_effect": 3.8,
+                "anaerobic_training_effect": 1.2,
+            }
+        ],
+    )
+    block = format_daily_metrics_block(metrics)
+    assert "Avg HR: 155 bpm" in block
+    assert "Max HR: 175 bpm" in block
+    assert "Aerobic TE: 3.8" in block
+    assert "Anaerobic TE: 1.2" in block
+
+
+def test_assemble_report_prompt_with_analytics_baseline() -> None:
+    """Test that report prompt includes computed 7-day statistical baselines."""
+    history = [
+        GarminDailyMetrics(
+            date=f"2026-08-0{i}",
+            steps=10000,
+            sleep_score=80,
+            resting_hr=55,
+            avg_stress=20,
+            total_calories=2300,
+            hrv_status="BALANCED",
+        )
+        for i in range(1, 8)
+    ]
+    current = GarminDailyMetrics(date="2026-08-08", steps=12000, sleep_score=85, resting_hr=53)
+
+    prompt = assemble_report_prompt(current_metrics=current, history=history)
+    assert "Sleep Score Baseline: 7-day Avg = 80.0" in prompt
+    assert "Resting Heart Rate Baseline: 7-day Avg = 55.0 bpm" in prompt
+    assert "HRV Trend Classification: Stable & Balanced" in prompt
+
+
+

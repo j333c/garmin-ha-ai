@@ -105,7 +105,8 @@ def _parse_hrv_data(hrv_data: dict[str, Any] | None) -> str | None:
 def _parse_activities(raw_activities: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     """Normalize activity list extracted from Garmin Connect.
 
-    Extracts activity ID, display name, activity type key, duration, distance, and calories.
+    Extracts activity ID, display name, activity type key, duration, distance, calories,
+    average/max heart rate, aerobic/anaerobic training effect, and HR zone data.
     """
     if not raw_activities or not isinstance(raw_activities, list):
         return []
@@ -118,14 +119,69 @@ def _parse_activities(raw_activities: list[dict[str, Any]] | None) -> list[dict[
         act_type = None
         if isinstance(act.get("activityType"), dict):
             act_type = act["activityType"].get("typeKey")
+        elif isinstance(act.get("activityType"), str):
+            act_type = act.get("activityType")
+        elif act.get("type"):
+            act_type = act.get("type")
+
+        dur_sec = act.get("duration") if act.get("duration") is not None else act.get("duration_sec")
+        dur_min = None
+        if dur_sec is not None:
+            try:
+                dur_min = round(float(dur_sec) / 60.0, 1)
+            except (ValueError, TypeError):
+                dur_min = None
+
+        dist_m = act.get("distance") if act.get("distance") is not None else act.get("distance_m")
+        dist_km = None
+        if dist_m is not None:
+            try:
+                dist_km = round(float(dist_m) / 1000.0, 2)
+            except (ValueError, TypeError):
+                dist_km = None
+
+        avg_hr = act.get("averageHR") or act.get("avgHR") or act.get("averageHeartRate") or act.get("avg_hr")
+        max_hr = act.get("maxHR") or act.get("maxHeartRate") or act.get("max_hr")
+        aerobic_te = act.get("aerobicTrainingEffect") or act.get("trainingEffect") or act.get("aerobic_training_effect")
+        anaerobic_te = act.get("anaerobicTrainingEffect") or act.get("anaerobic_training_effect")
+
+        # Safely convert numeric metrics
+        try:
+            avg_hr = int(round(float(avg_hr))) if avg_hr is not None else None
+        except (ValueError, TypeError):
+            avg_hr = None
+
+        try:
+            max_hr = int(round(float(max_hr))) if max_hr is not None else None
+        except (ValueError, TypeError):
+            max_hr = None
+
+        try:
+            aerobic_te = round(float(aerobic_te), 1) if aerobic_te is not None else None
+        except (ValueError, TypeError):
+            aerobic_te = None
+
+        try:
+            anaerobic_te = round(float(anaerobic_te), 1) if anaerobic_te is not None else None
+        except (ValueError, TypeError):
+            anaerobic_te = None
+
+        hr_zones = act.get("hrTimeInZones") or act.get("hrZones") or act.get("hr_zones") or {}
 
         activities.append({
-            "activity_id": act.get("activityId"),
-            "name": act.get("activityName"),
+            "activity_id": act.get("activityId") or act.get("activity_id"),
+            "name": act.get("activityName") or act.get("name"),
             "type": act_type,
-            "duration_sec": act.get("duration"),
-            "distance_m": act.get("distance"),
+            "duration_sec": dur_sec,
+            "duration_min": dur_min,
+            "distance_m": dist_m,
+            "distance_km": dist_km,
             "calories": act.get("calories"),
+            "avg_hr": avg_hr,
+            "max_hr": max_hr,
+            "aerobic_training_effect": aerobic_te,
+            "anaerobic_training_effect": anaerobic_te,
+            "hr_zones": hr_zones if isinstance(hr_zones, (dict, list)) else {},
         })
     return activities
 

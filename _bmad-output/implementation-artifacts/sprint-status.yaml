@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 08-15-2026 21:48
-last_updated: 08-16-2026 10:04
+last_updated: 08-22-2026 22:10
 project: garmin-ha-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -68,11 +68,26 @@ development_status:
   4-5-garmin-429-rate-limit-resilience-auth-flow-isolation: done
   epic-4-retrospective: done
 
-  epic-5: backlog
-  5-1-7-day-pre-computed-trend-and-baseline-analytics-engine: backlog
-  5-2-rich-activity-ingestion-and-heart-rate-zone-extraction: backlog
-  5-3-home-assistant-ambient-context-injection: backlog
-  epic-5-retrospective: optional
+  epic-5: done
+  5-1-7-day-pre-computed-trend-and-baseline-analytics-engine: done
+  5-2-rich-activity-ingestion-and-heart-rate-zone-extraction: done
+  epic-5-retrospective: done
+
+  epic-6: backlog
+  6-1-centralized-and-specific-error-taxonomy: backlog
+  6-2-comprehensive-ui-localization-engine: backlog
+  6-3-dual-mode-polling-engine-daily-fixed-time-vs-periodic-inter: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-multi-entry-storage-and-credential-isolation: backlog
+  7-2-per-user-device-and-entity-scope-with-custom-personas: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-packaged-custom-lovelace-card-with-gauges-and-qa-chat-draw: backlog
+  epic-8-retrospective: optional
+
 
 
 

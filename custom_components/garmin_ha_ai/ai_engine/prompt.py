@@ -6,6 +6,10 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from ..analytics import (
+    calculate_baseline_analytics,
+    format_baseline_analytics_block,
+)
 from ..helpers import truncate_entity_state
 from ..models import AIHealthReport, GarminDailyMetrics
 
@@ -51,7 +55,7 @@ def _format_metric_val(val: Any, unit: str = "", pending_note: str = "") -> str:
 def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
     """Format Block 1: Current Day Metrics.
 
-    Formats today's health indicators and workout list into a bulleted list for LLM context.
+    Formats today's health indicators and workout list (with HR stats and training effect) for LLM context.
     """
     if not metrics:
         return "No metrics recorded for today."
@@ -69,7 +73,7 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
         f"- Weight: {_format_metric_val(metrics.weight_kg, ' kg')}",
     ]
 
-    # Format logged workouts / activities
+    # Format logged workouts / activities with rich metrics
     if metrics.activities:
         lines.append("- Logged Activities:")
         for act in metrics.activities:
@@ -84,7 +88,28 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
             else:
                 act_dur = "N/A"
             act_cal = act.get("calories", "N/A")
-            lines.append(f"  * {act_type}: {act_dur} min, {act_cal} kcal")
+
+            act_details = [f"{act_dur} min", f"{act_cal} kcal"]
+            if act.get("distance_km") is not None:
+                act_details.append(f"{act.get('distance_km')} km")
+
+            hr_parts = []
+            if act.get("avg_hr") is not None:
+                hr_parts.append(f"Avg HR: {act.get('avg_hr')} bpm")
+            if act.get("max_hr") is not None:
+                hr_parts.append(f"Max HR: {act.get('max_hr')} bpm")
+            if hr_parts:
+                act_details.append(", ".join(hr_parts))
+
+            te_parts = []
+            if act.get("aerobic_training_effect") is not None:
+                te_parts.append(f"Aerobic TE: {act.get('aerobic_training_effect')}")
+            if act.get("anaerobic_training_effect") is not None:
+                te_parts.append(f"Anaerobic TE: {act.get('anaerobic_training_effect')}")
+            if te_parts:
+                act_details.append(", ".join(te_parts))
+
+            lines.append(f"  * {act_type}: {', '.join(act_details)}")
     else:
         lines.append("- Logged Activities: None")
 
@@ -205,7 +230,7 @@ def assemble_report_prompt(
     """Assemble 5-block prompt context payload for daily AI report generation.
 
     Block 1: Current Day Metrics (Steps, HR, Sleep, Stress, HRV, Body Battery, Activities)
-    Block 2: Historical Trends (7-day rolling context)
+    Block 2: Historical Trends & Pre-Computed Analytics Baselines (7-day rolling context)
     Block 3: User Goals & Profile (Customizable)
     Block 4: Persona Directives & Tone (Customizable)
     Block 5: Structural Output Formatting Rules (Summary tags and markdown headings)
@@ -213,9 +238,18 @@ def assemble_report_prompt(
     # Block 1: Current Day Metrics
     block1_content = format_daily_metrics_block(current_metrics)
 
-    # Block 2: Historical Trends
+    # Block 2: Historical Trends & Pre-computed Baselines
     history_list = history or []
-    block2_content, _ = truncate_history_context(history_list, max_chars=max_history_chars)
+    block2_chronological, _ = truncate_history_context(history_list, max_chars=max_history_chars)
+
+    # Calculate deterministic baseline analytics
+    analytics_data = calculate_baseline_analytics(
+        current_metrics=current_metrics,
+        history=history_list,
+    )
+    block2_analytics = format_baseline_analytics_block(analytics_data)
+
+    block2_content = f"{block2_analytics}\n\nDaily Log History:\n{block2_chronological}"
 
     # Block 3: User Goals & Profile (Sanitized)
     sanitized_goals = sanitize_prompt_input(user_goals)
@@ -237,7 +271,8 @@ def assemble_report_prompt(
         "   - ## Sleep & Stress Analysis\n"
         "   - ## Activity & Performance\n"
         "   - ## Actionable Recommendations for Tomorrow\n"
-        "4. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep."
+        "4. Ground recommendations using the pre-computed 7-day baseline averages and trend deltas provided in Block 2.\n"
+        "5. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep."
     )
 
     # Assemble into full structured context string
@@ -266,12 +301,22 @@ def assemble_qa_prompt(
 ) -> str:
     """Assemble prompt payload for interactive Q&A session.
 
-    Grounds user questions in rolling metrics history, personal fitness goals, and coaching directives.
+    Grounds user questions in rolling metrics history, statistical baselines, personal fitness goals, and coaching directives.
     """
     history_list = history or []
-    block_history_content, _ = truncate_history_context(
+    block_history_chronological, _ = truncate_history_context(
         history_list, max_chars=max_history_chars
     )
+
+    # Compute baseline statistics for Q&A grounding
+    current_sample = history_list[-1] if history_list else None
+    analytics_data = calculate_baseline_analytics(
+        current_metrics=current_sample,
+        history=history_list,
+    )
+    block_analytics = format_baseline_analytics_block(analytics_data)
+
+    block_history_content = f"{block_analytics}\n\nDaily Log History:\n{block_history_chronological}"
 
     sanitized_question = sanitize_prompt_input(question)
     sanitized_goals = sanitize_prompt_input(user_goals)
@@ -283,7 +328,7 @@ def assemble_qa_prompt(
     prompt = (
         f"### USER QUESTION\n"
         f"{sanitized_question}\n\n"
-        "### HISTORICAL METRICS CONTEXT\n"
+        "### HISTORICAL METRICS CONTEXT & BASELINES\n"
         f"{block_history_content}\n\n"
         "### USER GOALS & PROFILE\n"
         f"{block_goals}\n\n"
@@ -291,10 +336,8 @@ def assemble_qa_prompt(
         f"{block_directives}\n\n"
         "### INSTRUCTIONS FOR RESPONSE:\n"
         "1. Provide a clear, evidence-based, concise answer directly addressing the user's question.\n"
-        "2. Ground your recommendations using the provided historical health metrics and user goals.\n"
+        "2. Ground your recommendations using the provided historical health metrics, computed baselines, and user goals.\n"
         "3. Keep the tone encouraging, supportive, and actionable."
     )
 
     return prompt
-
-

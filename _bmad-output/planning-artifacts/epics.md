@@ -112,9 +112,21 @@ User can ask context-grounded health and workout questions on demand via service
 User can dynamically select Gemini/OpenAI models from an API-populated dropdown in Options Flow (with modern model defaults and fast-failing non-transient error handling), configure daily polling schedule using an interactive UI Time Picker, trigger AI health report generation on-demand via a native Home Assistant Button entity (`button.garmin_ai_generate_report`) or dashboard button card, ask interactive coaching questions via dedicated dashboard card patterns, and benefit from non-blocking event-loop operation, ISO timestamp datetime typing, and resilient Garmin 429 rate-limit handling.
 **FRs covered:** FR-3, FR-5, FR-6, FR-8, FR-11, FR-13, FR-14, FR-17
 
-### Epic 5: Trend Analytics, Baseline Deltas & Home Assistant Context Enrichment
-User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores), granular activity metrics (heart rate zones, pace, workout structure), and ambient Home Assistant context injection (sleep bedroom temperature, presence, and calendar schedules).
+### Epic 5: Trend Analytics & Baseline Deltas
+User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores) and granular activity metrics (heart rate zones, pace, workout structure).
 **FRs covered:** FR-7, FR-14, FR-15
+
+### Epic 6: Platform Hardening, i18n & Polling Flexibility
+User and system benefit from a robust, unified error handling hierarchy for Garmin and AI APIs, full English and German UI string localization with extensible translation structure, and flexible dual-mode polling (daily fixed time vs periodic interval).
+**FRs covered:** FR-3, FR-4, FR-8, FR-16, FR-17
+
+### Epic 7: Multi-Account & Multi-Member Profiles
+Multiple household members can configure independent Garmin Connect accounts, distinct AI coaching personas/goals, and isolated local storage/devices within the same Home Assistant instance.
+**FRs covered:** FR-1, FR-7, FR-16, FR-17
+
+### Epic 8: Packaged Custom Lovelace Dashboard Card
+User can easily install and configure a dedicated, rich Lovelace dashboard card featuring animated recovery/sleep/body battery gauges, daily coaching previews, and an integrated interactive Q&A chat drawer.
+**FRs covered:** FR-10, FR-14, UX-DR-1, UX-DR-2, UX-DR-3, UX-DR-4, UX-DR-5
 
 
 ## Epic 1: Integration Setup, Garmin Auth & Health Metric Ingestion Foundation
@@ -402,9 +414,9 @@ So that temporary Garmin IP rate limits do not trigger false re-authentication a
 
 ---
 
-## Epic 5: Trend Analytics, Baseline Deltas & Home Assistant Context Enrichment
+## Epic 5: Trend Analytics & Baseline Deltas
 
-User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores), granular activity metrics (heart rate zones, pace, workout structure), and ambient Home Assistant context injection (sleep bedroom temperature, presence, and calendar schedules).
+User receives advanced AI coaching synthesis powered by pre-computed 7-day baseline trend deltas (HRV status baseline variance, rolling sleep score averages, recovery scores) and granular activity metrics (heart rate zones, pace, workout structure).
 
 ### Story 5.1: 7-Day Pre-Computed Trend & Baseline Analytics Engine (`analytics.py`)
 
@@ -432,17 +444,107 @@ So that the AI coach can assess workout intensity and suggest specific recovery 
 **Then** `GarminDailyMetrics.activities` includes HR stats (avg HR, max HR) and training effect metrics
 **And** prompt assembler presents activity intensity to the AI provider.
 
-### Story 5.3: Home Assistant Ambient Context Injection (Sleep Room Temp & Calendar Awareness)
+---
 
-As a smart home owner,
-I want the integration to allow selecting external Home Assistant entities (e.g. bedroom temperature sensor, sleep room humidity, work calendar),
-So that the AI health coach can correlate sleep disruptions with room climate and schedule intense workouts around light work days.
+## Epic 6: Platform Hardening, i18n & Polling Flexibility
+
+User and system benefit from a robust, unified error handling hierarchy for Garmin and AI APIs, full English and German UI string localization with extensible translation structure, and flexible dual-mode polling (daily fixed time vs periodic interval).
+
+### Story 6.1: Centralized & Specific Error Taxonomy (`exceptions.py`)
+
+As a developer and system maintainer,
+I want a centralized, strongly-typed exception hierarchy for all Garmin Connect API operations and AI Engine provider calls,
+So that failures (auth invalidation, MFA challenges, rate limits, network timeouts, API quota depletion, client 4xx errors) are handled with deterministic, granular precision across coordinators, config flows, and UI alerts.
 
 **Acceptance Criteria:**
 
-**Given** configured entity selectors in Options Flow (e.g. `sensor.bedroom_temperature`, `calendar.work`)
-**When** generating daily briefings
-**Then** coordinator reads the current states and incorporates ambient environmental context into prompt Block 3.
+**Given** the `custom_components/garmin_ha_ai/` integration package
+**When** API, network, or authentication errors occur in `garmin_client.py` or `ai_engine/`
+**Then** `exceptions.py` provides distinct base and specialized exception classes:
+  - `GarminError` -> `GarminAuthError`, `GarminMfaRequired`, `GarminRateLimitError`, `GarminConnectionError`, `GarminDataParsingError`
+  - `AIEngineError` -> `AIEngineAuthError`, `AIEngineQuotaError`, `AIEngineTimeoutError`, `AIEngineModelNotFoundError`, `AIEngineClientError`
+**And** coordinator and config/options flow catch specific exception types rather than broad `Exception` catches, mapping each to appropriate UI state banners or log levels.
+
+### Story 6.2: Comprehensive UI Localization Engine (`strings.json`, `en.json`, `de.json`)
+
+As an international Home Assistant user,
+I want all integration UI elements, configuration forms, entity names, select options, service descriptions, and error notifications localized in English and German with a clean extensible structure,
+So that I can use the integration comfortably in my native language and easily contribute additional translations.
+
+**Acceptance Criteria:**
+
+**Given** `strings.json` and language files in `translations/`
+**When** navigating Config Flow, Options Flow, entity settings, or service schemas in Home Assistant
+**Then** 100% of user-facing strings are fully keyed and localized in `translations/en.json` and `translations/de.json`
+**And** `strings.json` acts as the canonical template with modular namespaces (`config`, `options`, `entity`, `services`, `exceptions`, `frontend`) enabling straightforward addition of further language files (e.g. `fr.json`, `es.json`).
+
+### Story 6.3: Dual-Mode Polling Engine (Daily Fixed Time vs Periodic Interval Selector)
+
+As a Home Assistant user,
+I want the option to configure Garmin API polling either at a specific daily time (e.g. 06:30) or across recurring periodic intervals (e.g. every 1, 3, 6, 12, or 24 hours) in Options Flow,
+So that I can align data sync with my personal schedule or continuous multi-workout monitoring.
+
+**Acceptance Criteria:**
+
+**Given** the Options Flow configuration UI
+**When** setting the polling schedule
+**Then** user can choose between "Daily Fixed Time" (rendering native `TimeSelector`) and "Periodic Interval" (rendering interval dropdown/selector)
+**And** `coordinator.py` dynamically adjusts its scheduling loop upon options save without requiring an integration restart.
+
+---
+
+## Epic 7: Multi-Account & Multi-Member Profiles
+
+Multiple household members can configure independent Garmin Connect accounts, distinct AI coaching personas/goals, and isolated local storage/devices within the same Home Assistant instance.
+
+### Story 7.1: Multi-Entry Storage & Credential Isolation (`storage.py`, `garmin_client.py`)
+
+As a household with multiple Garmin users,
+I want each integration entry to maintain fully isolated local storage files and OAuth sessions,
+So that multiple family members can log into Garmin Connect concurrently without token collision or data leakage.
+
+**Acceptance Criteria:**
+
+**Given** multiple configured `garmin_ha_ai` config entries
+**When** tokens and metric histories are saved or loaded
+**Then** `storage.py` partitions storage files by config entry ID (`garmin_ha_ai_tokens_{entry_id}.json` and `garmin_ha_ai_history_{entry_id}.json`)
+**And** each client instance maintains its own thread-safe session and `asyncio.Lock()`.
+
+### Story 7.2: Per-User Device & Entity Scope with Custom Personas (`sensor.py`, `coordinator.py`)
+
+As a family member,
+I want my Garmin sensors and AI coaching reports grouped under my own dedicated Home Assistant Device with my unique fitness goals and coaching persona,
+So that my health metrics and AI advice are completely personalized and distinct from other household members.
+
+**Acceptance Criteria:**
+
+**Given** multiple configured `garmin_ha_ai` accounts
+**When** entity platforms (`sensor`, `button`, `select`, `text`) initialize
+**Then** each account creates a distinct Home Assistant Device entry (e.g. `Garmin HA AI - {Garmin Username}`)
+**And** all entity unique IDs are prefixed with `entry_id` to prevent collisions
+**And** AI coaching prompts evaluate the specific user's goals and persona directives configured in that entry's Options Flow.
+
+---
+
+## Epic 8: Packaged Custom Lovelace Dashboard Card
+
+User can easily install and configure a dedicated, rich Lovelace dashboard card featuring animated recovery/sleep/body battery gauges, daily coaching previews, and an integrated interactive Q&A chat drawer.
+
+### Story 8.1: Packaged Custom Lovelace Card with Gauges & Q&A Chat Drawer (`frontend/`)
+
+As a Home Assistant user,
+I want a custom Lovelace dashboard card (`custom:garmin-ha-ai-card`) that visualizes recovery, sleep score, and body battery with color-coded circular gauges, displays daily/weekly AI coaching summaries, and includes an interactive Q&A drawer,
+So that I can view my fitness status and converse with my AI Health Coach directly from a polished dashboard UI.
+
+**Acceptance Criteria:**
+
+**Given** the custom card resource registered in Home Assistant
+**When** adding `type: custom:garmin-ha-ai-card` to a Lovelace dashboard
+**Then** the card renders:
+  1. Visual status gauges for Body Battery, Sleep Score, and HRV Status with status colors (Emerald, Amber, Coral)
+  2. Expandable coaching briefing with toggle between concise overview and full Markdown report
+  3. Interactive Q&A conversational drawer with message history and input form triggering `garmin_ha_ai.ask_question`
+**And** card visual elements adapt seamlessly to Home Assistant light/dark themes using standard HA CSS variables.
 
 
 

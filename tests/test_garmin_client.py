@@ -572,6 +572,45 @@ def test_parse_user_summary_edge_cases() -> None:
     assert summary2["distance_km"] is None
 
 
+def test_parse_activities_rich_metrics() -> None:
+    """Test _parse_activities extracting heart rate zones, training effect, and HR stats."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_activities
+
+    raw = [
+        {
+            "activityId": 12345,
+            "activityName": "Interval Track Workout",
+            "activityType": {"typeKey": "running"},
+            "duration": 2700,
+            "distance": 8500,
+            "calories": 620,
+            "averageHR": 162.4,
+            "maxHR": 184,
+            "aerobicTrainingEffect": 4.1,
+            "anaerobicTrainingEffect": 2.3,
+            "hrTimeInZones": {"zone1": 120, "zone2": 300, "zone3": 900, "zone4": 1200, "zone5": 180},
+        }
+    ]
+
+    acts = _parse_activities(raw)
+    assert len(acts) == 1
+    act = acts[0]
+    assert act["activity_id"] == 12345
+    assert act["name"] == "Interval Track Workout"
+    assert act["type"] == "running"
+    assert act["duration_sec"] == 2700
+    assert act["duration_min"] == 45.0
+    assert act["distance_m"] == 8500
+    assert act["distance_km"] == 8.5
+    assert act["calories"] == 620
+    assert act["avg_hr"] == 162
+    assert act["max_hr"] == 184
+    assert act["aerobic_training_effect"] == 4.1
+    assert act["anaerobic_training_effect"] == 2.3
+    assert "zone4" in act["hr_zones"]
+
+
+
 
 
 
