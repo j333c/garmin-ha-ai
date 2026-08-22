@@ -65,10 +65,11 @@ if "homeassistant" not in sys.modules:
             return {"type": "abort", "reason": reason}
 
     class MockStore:
-        def __init__(self, hass, version, key):
+        def __init__(self, hass, version, key, **kwargs):
             self.hass = hass
             self.version = version
             self.key = key
+            self.private = kwargs.get("private", False)
             self.async_load = AsyncMock(return_value={})
             self.async_save = AsyncMock(return_value=None)
 

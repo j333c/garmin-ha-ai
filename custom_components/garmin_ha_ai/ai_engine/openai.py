@@ -109,19 +109,22 @@ class OpenAIProvider(BaseAIProvider):
                 # HTTP 429 Quota / Rate limit
                 if response.status_code == 429:
                     raise AIEngineQuotaError(
-                        f"OpenAI API rate limit / quota exceeded (429): {response.text}"
+                        f"OpenAI API rate limit / quota exceeded (429)"
                     )
+
+                # Sanitize error response to prevent health data leakage via reflected prompts
+                sanitized_error = (response.text or "")[:200]
 
                 # Non-retryable 4xx client errors (400 bad request, 401 invalid key, 404 model not found)
                 if response.status_code in (400, 401, 403, 404):
                     raise AIEngineClientError(
-                        f"OpenAI API client error ({response.status_code}): {response.text}"
+                        f"OpenAI API client error ({response.status_code}): {sanitized_error}"
                     )
 
                 # 5xx server errors
                 if response.status_code >= 500:
                     raise AIEngineError(
-                        f"OpenAI API server error ({response.status_code}): {response.text}"
+                        f"OpenAI API server error ({response.status_code}): {sanitized_error}"
                     )
 
                 response.raise_for_status()

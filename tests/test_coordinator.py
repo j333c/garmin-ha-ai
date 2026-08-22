@@ -28,8 +28,7 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
 
     sample_metrics = GarminDailyMetrics(date="2026-08-15", steps=10000)
     mock_client.async_fetch_daily_metrics = AsyncMock(return_value=sample_metrics)
-    mock_storage.async_save_daily_metrics = AsyncMock()
-    mock_storage.async_prune_history = AsyncMock()
+    mock_storage.async_save_and_prune_history = AsyncMock()
 
     def _create_task(coro):
         coro.close()
@@ -45,8 +44,7 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
 
     assert metrics is sample_metrics
     mock_client.async_fetch_daily_metrics.assert_called()
-    mock_storage.async_save_daily_metrics.assert_called_once_with(sample_metrics.to_dict())
-    mock_storage.async_prune_history.assert_called_once()
+    mock_storage.async_save_and_prune_history.assert_called_once_with(sample_metrics.to_dict(), 30)
     hass.async_create_task.assert_called_once()
 
 
@@ -394,6 +392,123 @@ async def test_coordinator_error_tracking_on_ai_failure(hass: HomeAssistant) -> 
         mock_provider.async_generate_response = AsyncMock(return_value="Yes, you will recover well.")
         await coordinator.async_ask_question("Will I recover?")
         assert coordinator.latest_error is None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_async_generate_report_error_handling(hass: HomeAssistant) -> None:
+    """Test async_generate_report captures AIEngineError and Exception without crashing."""
+    from custom_components.garmin_ha_ai.ai_engine.base import AIEngineError
+
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        return_value=GarminDailyMetrics(date="2026-08-16", steps=8000)
+    )
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    mock_provider = AsyncMock()
+    # 1. AIEngineError
+    mock_provider.async_generate_response = AsyncMock(
+        side_effect=AIEngineError("Quota exceeded")
+    )
+
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ):
+        report = await coordinator.async_generate_report()
+        assert report is None
+        assert coordinator.latest_error == "Quota exceeded"
+        assert coordinator.last_error_time is not None
+
+        # 2. General unexpected Exception
+        mock_provider.async_generate_response = AsyncMock(
+            side_effect=RuntimeError("Unexpected connection reset")
+        )
+        report2 = await coordinator.async_generate_report()
+        assert report2 is None
+        assert "Unexpected connection reset" in coordinator.latest_error
+
+
+@pytest.mark.asyncio
+async def test_coordinator_async_ask_question_uses_stored_input_fallback(hass: HomeAssistant) -> None:
+    """Test async_ask_question falls back to self.question_input when question is None or empty."""
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    coordinator.set_question_input("How was my training today?")
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(
+        return_value="Your training was well-paced and within recovery zones."
+    )
+
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ):
+        # Call without question argument -> should use stored question_input
+        ans = await coordinator.async_ask_question()
+        assert "well-paced" in ans
+        assert coordinator.latest_answer["question"] == "How was my training today?"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_async_generate_report_force_refetches_metrics(hass: HomeAssistant) -> None:
+    """Test async_generate_report with force=True refetches fresh daily metrics from Garmin."""
+    mock_entry = MagicMock()
+    mock_entry.data = {CONF_AI_PROVIDER: "gemini", CONF_AI_API_KEY: "test-key"}
+    mock_entry.options = {}
+
+    mock_client = MagicMock()
+    cached_metrics = GarminDailyMetrics(date="2026-08-16", steps=5000)
+    fresh_metrics = GarminDailyMetrics(date="2026-08-16", steps=12000)
+    mock_client.async_fetch_daily_metrics = AsyncMock(return_value=fresh_metrics)
+
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(return_value={})
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    # Set cached data
+    coordinator.data = cached_metrics
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(
+        return_value="<summary>Report</summary>\nFull report"
+    )
+
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ), patch(
+        "custom_components.garmin_ha_ai.coordinator.assemble_report_prompt"
+    ) as mock_prompt_assembler:
+        mock_prompt_assembler.return_value = "prompt text"
+        report = await coordinator.async_generate_report(force=True)
+
+        assert report is not None
+        mock_client.async_fetch_daily_metrics.assert_called_once()
+        # Prompt assembler should receive the fresh metrics (12000 steps)
+        assert mock_prompt_assembler.call_args[1]["current_metrics"] == fresh_metrics
+
 
 
 

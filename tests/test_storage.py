@@ -199,3 +199,68 @@ def test_save_daily_metrics(mock_hass: MagicMock) -> None:
 
     asyncio.run(run())
 
+
+def test_storage_token_store_private_flag(mock_hass: MagicMock) -> None:
+    """Test that token Store is created with private=True for secure file permissions."""
+    storage = GarminStorage(mock_hass)
+    assert getattr(storage._token_store, "private", None) is True
+
+
+def test_save_daily_metrics_empty_or_invalid(mock_hass: MagicMock) -> None:
+    """Test that empty snapshots or snapshots missing 'date' are rejected without saving."""
+
+    async def run() -> None:
+        storage = GarminStorage(mock_hass)
+        storage._history_store.async_save = AsyncMock()
+        storage._history_store.async_load = AsyncMock(return_value={})
+
+        # 1. Empty dict
+        await storage.async_save_daily_metrics({})
+        storage._history_store.async_save.assert_not_called()
+
+        # 2. None
+        await storage.async_save_daily_metrics(None)
+        storage._history_store.async_save.assert_not_called()
+
+        # 3. Missing date key
+        await storage.async_save_daily_metrics({"steps": 5000})
+        storage._history_store.async_save.assert_not_called()
+
+    asyncio.run(run())
+
+
+def test_save_and_prune_history_atomic(mock_hass: MagicMock) -> None:
+    """Test async_save_and_prune_history adds new entry and prunes in a single disk write."""
+
+    async def run() -> None:
+        storage = GarminStorage(mock_hass)
+        history_data = {
+            "2020-01-01": {"date": "2020-01-01", "steps": 3000},
+            "2026-08-15": {"date": "2026-08-15", "steps": 10000},
+        }
+
+        async def mock_save(data: dict) -> None:
+            history_data.clear()
+            history_data.update(data)
+
+        async def mock_load() -> dict:
+            return history_data
+
+        storage._history_store.async_save = AsyncMock(side_effect=mock_save)
+        storage._history_store.async_load = AsyncMock(side_effect=mock_load)
+
+        new_snapshot = {"date": "2026-08-16", "steps": 12500}
+        await storage.async_save_and_prune_history(new_snapshot, retention_days=30)
+
+        # Single save call performed
+        storage._history_store.async_save.assert_called_once()
+        # Old entry pruned
+        assert "2020-01-01" not in history_data
+        # Existing recent entry retained
+        assert "2026-08-15" in history_data
+        # New entry saved
+        assert history_data["2026-08-16"] == new_snapshot
+
+    asyncio.run(run())
+
+

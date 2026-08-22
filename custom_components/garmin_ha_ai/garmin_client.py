@@ -138,9 +138,17 @@ def _parse_user_summary(summary_data: dict[str, Any] | None) -> dict[str, Any]:
     if not summary_data or not isinstance(summary_data, dict):
         return {}
 
+    # Guard against transient API failures returning empty payloads that would
+    # overwrite valid historical data with None values
+    if not any(summary_data.get(k) for k in ("totalSteps", "totalDistanceMeters", "restingHeartRate")):
+        return {}
+
     steps = summary_data.get("totalSteps")
     distance_m = summary_data.get("totalDistanceMeters")
-    distance_km = round(distance_m / 1000.0, 2) if distance_m is not None else None
+    try:
+        distance_km = round(float(distance_m) / 1000.0, 2) if distance_m is not None else None
+    except (ValueError, TypeError):
+        distance_km = None
     total_calories = summary_data.get("totalKilocalories") or summary_data.get("activeKilocalories")
     resting_hr = summary_data.get("restingHeartRate")
     avg_stress = summary_data.get("averageStressLevel")

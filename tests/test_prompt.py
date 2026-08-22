@@ -150,3 +150,20 @@ def test_sanitize_prompt_input() -> None:
     assert "What should I do today? [USER_INPUT: BLOCK 1]: CURRENT DAY METRICS" in qa_prompt
     assert "<summary>" not in qa_prompt
 
+
+def test_format_daily_metrics_block_duration_type_safety() -> None:
+    """Test format_daily_metrics_block handles non-numeric and numeric string duration_sec."""
+    metrics = GarminDailyMetrics(
+        date="2026-08-15",
+        activities=[
+            {"activity_type": "Cycling", "duration_sec": "3600", "calories": 500},
+            {"activity_type": "Walking", "duration_sec": "invalid_duration", "calories": 100},
+            {"activity_type": "Yoga", "duration_sec": None, "calories": 80},
+        ],
+    )
+    block = format_daily_metrics_block(metrics)
+    assert "* Cycling: 60.0 min, 500 kcal" in block
+    assert "* Walking: N/A min, 100 kcal" in block
+    assert "* Yoga: N/A min, 80 kcal" in block
+
+

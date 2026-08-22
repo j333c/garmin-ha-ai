@@ -170,7 +170,7 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         new_callable=AsyncMock,
         return_value=mock_metrics,
     ), patch(
-        "custom_components.garmin_ha_ai.storage.GarminStorage.async_save_daily_metrics",
+        "custom_components.garmin_ha_ai.storage.GarminStorage.async_save_and_prune_history",
         new_callable=AsyncMock,
     ) as mock_save_history:
         setup_success = await async_setup_entry(hass, config_entry)
@@ -182,7 +182,7 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         storage = entry_store["storage"]
 
         assert coordinator.data == mock_metrics
-        mock_save_history.assert_called_once_with(mock_metrics.to_dict())
+        mock_save_history.assert_called_once_with(mock_metrics.to_dict(), 30)
 
         # Verify 11 sensor entities + 2 button entities + 1 text + 1 select = 15 total
         assert len(registered_entities) == 15

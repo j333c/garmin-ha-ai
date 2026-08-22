@@ -17,18 +17,24 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_FILE_PATH = FRONTEND_DIR / FRONTEND_JS_FILE
 MANIFEST_PATH = Path(__file__).parent / "manifest.json"
 
-# Extract component version for cache-busting query parameter in Lovelace
-VERSION = "0.5.0-rc2"
-if MANIFEST_PATH.exists():
-    try:
-        manifest_data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-        VERSION = manifest_data.get("version", "0.5.0-rc2")
-    except Exception:
-        pass
-
-FRONTEND_URL_VERSIONED = f"{FRONTEND_URL}?v={VERSION}"
+# Default fallback version for cache-busting query parameter in Lovelace
+_DEFAULT_VERSION = "0.5.0-rc3"
 
 _FRONTEND_REGISTERED = False
+
+
+def _resolve_manifest_version() -> str:
+    """Read manifest.json synchronously and extract the version string.
+
+    Intended to run inside an executor thread — never call directly from the event loop.
+    """
+    try:
+        if MANIFEST_PATH.exists():
+            manifest_data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+            return manifest_data.get("version", _DEFAULT_VERSION)
+    except Exception:
+        pass
+    return _DEFAULT_VERSION
 
 
 async def async_setup_frontend(hass: HomeAssistant) -> None:
@@ -45,7 +51,11 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
     if _FRONTEND_REGISTERED:
         return
 
-    if not FRONTEND_FILE_PATH.exists():
+    # Resolve version and check file existence off the event loop
+    version = await hass.async_add_executor_job(_resolve_manifest_version)
+    frontend_url_versioned = f"{FRONTEND_URL}?v={version}"
+
+    if not await hass.async_add_executor_job(FRONTEND_FILE_PATH.exists):
         LOGGER.warning("Garmin HA AI frontend card file not found at %s", FRONTEND_FILE_PATH)
         return
 
@@ -99,8 +109,8 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
     try:
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, FRONTEND_URL_VERSIONED)
-        LOGGER.info("Successfully registered Garmin HA AI custom Lovelace cards: %s", FRONTEND_URL_VERSIONED)
+        add_extra_js_url(hass, frontend_url_versioned)
+        LOGGER.info("Successfully registered Garmin HA AI custom Lovelace cards: %s", frontend_url_versioned)
         _FRONTEND_REGISTERED = True
     except (ImportError, AttributeError, Exception) as err:
         LOGGER.debug("Could not add extra JS URL to frontend (may be running in test or headless mode): %s", err)
@@ -114,7 +124,7 @@ async def async_setup_frontend(hass: HomeAssistant) -> None:
             if hasattr(resources, "async_create_item") and hasattr(resources, "async_items"):
                 items = resources.async_items()
                 if not any(item.get("url", "").startswith(FRONTEND_URL) for item in items):
-                    await resources.async_create_item({"res_type": "module", "url": FRONTEND_URL_VERSIONED})
+                    await resources.async_create_item({"res_type": "module", "url": frontend_url_versioned})
                     LOGGER.debug("Auto-registered Garmin HA AI cards in Lovelace resources")
     except Exception as err:
         LOGGER.debug("Lovelace resources auto-registration skipped: %s", err)

@@ -30,7 +30,7 @@ class GarminStorage:
         """Initialize storage helper with HA Store instances and locks."""
         # Separate storage stores for sensitive OAuth tokens and metrics history
         self._token_store: Store[dict[str, Any]] = Store(
-            hass, STORAGE_VERSION, STORAGE_KEY_TOKENS
+            hass, STORAGE_VERSION, STORAGE_KEY_TOKENS, private=True
         )
         self._history_store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, STORAGE_KEY_HISTORY
@@ -122,5 +122,45 @@ class GarminStorage:
             if len(pruned_history) != len(history):
                 await self._history_store.async_save(pruned_history)
 
+    async def async_save_and_prune_history(
+        self, metrics_dict: dict[str, Any], retention_days: int
+    ) -> None:
+        """Save a daily metric snapshot and prune old entries in a single atomic disk write.
 
+        Combines async_save_daily_metrics and async_prune_history into one operation,
+        eliminating the double load/parse/save overhead per polling cycle.
+        """
+        if not metrics_dict or "date" not in metrics_dict:
+            return
+
+        async with self._history_lock:
+            try:
+                data = await self._history_store.async_load()
+                history = data if isinstance(data, dict) else {}
+
+                # Inject today's snapshot
+                history[metrics_dict["date"]] = metrics_dict
+
+                # Calculate retention cutoff and prune in the same pass
+                days = int(retention_days) if retention_days else 30
+                cutoff = None
+                try:
+                    now = dt_util.now()
+                    if isinstance(getattr(now, "year", None), int) and hasattr(now, "date"):
+                        cutoff = (now.date() - timedelta(days=days)).strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+
+                if not cutoff or not isinstance(cutoff, str):
+                    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+                pruned_history = {
+                    date_str: metrics
+                    for date_str, metrics in history.items()
+                    if isinstance(date_str, str) and date_str >= cutoff
+                }
+
+                await self._history_store.async_save(pruned_history)
+            except Exception as err:
+                LOGGER.warning("Error during atomic save-and-prune of metrics history: %s", err)
 

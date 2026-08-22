@@ -77,7 +77,10 @@ def format_daily_metrics_block(metrics: GarminDailyMetrics | None) -> str:
             if act.get("duration_min") is not None:
                 act_dur = act.get("duration_min")
             elif act.get("duration_sec") is not None:
-                act_dur = round(float(act["duration_sec"]) / 60, 1)
+                try:
+                    act_dur = round(float(act["duration_sec"]) / 60, 1)
+                except (ValueError, TypeError):
+                    act_dur = "N/A"
             else:
                 act_dur = "N/A"
             act_cal = act.get("calories", "N/A")

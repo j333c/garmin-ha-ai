@@ -158,8 +158,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
         self._is_generating = True
         try:
             metrics = self.data
-            if not metrics:
-                LOGGER.debug("No cached metrics available; fetching daily metrics from Garmin")
+            if not metrics or force:
+                LOGGER.debug("Fetching fresh daily metrics from Garmin (force=%s)", force)
                 metrics = await self.client.async_fetch_daily_metrics()
 
             # Load 7-day rolling history snapshot from local storage
@@ -326,13 +326,10 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             # 1. Fetch metrics from Garmin Connect Cloud
             metrics = await self.client.async_fetch_daily_metrics()
 
-            # 2. Persist metrics snapshot into local storage
-            await self.storage.async_save_daily_metrics(metrics.to_dict())
-
-            # 3. Prune history older than configured retention period
+            # 2. Persist metrics snapshot and prune old entries atomically (single disk write)
             options = {**self.entry.data, **self.entry.options}
             retention_days = int(options.get(CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS))
-            await self.storage.async_prune_history(retention_days)
+            await self.storage.async_save_and_prune_history(metrics.to_dict(), retention_days)
 
             LOGGER.debug(
                 "Successfully polled Garmin metrics for date %s: %s steps",

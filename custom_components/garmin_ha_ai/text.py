@@ -9,7 +9,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import GarminDataUpdateCoordinator
-from .helpers import get_device_info
+from .helpers import get_device_info, truncate_entity_state
 
 
 async def async_setup_entry(
@@ -52,7 +52,7 @@ class GarminAIQuestionTextEntity(
     @property
     def native_value(self) -> str:
         """Return the current text value from coordinator state."""
-        return self.coordinator.question_input
+        return truncate_entity_state(self.coordinator.question_input, max_len=250, placeholder="")
 
     async def async_set_value(self, value: str) -> None:
         """Set the text value in coordinator and notify listeners."""

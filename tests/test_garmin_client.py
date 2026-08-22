@@ -494,5 +494,84 @@ def test_serialize_session_tokens() -> None:
     assert result == "serialized_oauth_token"
 
 
+def test_async_login_with_credentials_mfa_tuple() -> None:
+    """Test async_login_with_credentials handles ('needs_mfa', ...) tuple return."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
+            mock_garmin_inst = MagicMock()
+            mock_garmin_inst.login.return_value = ("needs_mfa", "extra_info")
+            mock_garmin_cls.return_value = mock_garmin_inst
+
+            with pytest.raises(GarminMfaRequired):
+                await client_adapter.async_login_with_credentials("user@example.com", "pass")
+
+    asyncio.run(run())
+
+
+def test_async_login_with_credentials_mfa_string_exception() -> None:
+    """Test async_login_with_credentials recognizes MFA in exception messages."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
+            mock_garmin_inst = MagicMock()
+            mock_garmin_inst.login.side_effect = Exception("2FA Verification code required")
+            mock_garmin_cls.return_value = mock_garmin_inst
+
+            with pytest.raises(GarminMfaRequired):
+                await client_adapter.async_login_with_credentials("user@example.com", "pass")
+
+    asyncio.run(run())
+
+
+def test_parse_user_summary_edge_cases() -> None:
+    """Test _parse_user_summary with string distances, empty payloads, and missing keys."""
+    from custom_components.garmin_ha_ai.garmin_client import _parse_user_summary
+
+    # Empty payload or not dict
+    assert _parse_user_summary({}) == {}
+    assert _parse_user_summary(None) == {}
+    assert _parse_user_summary({"unknown_key": 123}) == {}
+
+    # String distance_m that can be converted
+    valid_str_dist = {
+        "totalSteps": 5000,
+        "totalDistanceMeters": "4500",
+        "restingHeartRate": 60,
+    }
+    summary = _parse_user_summary(valid_str_dist)
+    assert summary["steps"] == 5000
+    assert summary["distance_km"] == 4.5
+
+    # Invalid non-convertible distance_m
+    invalid_str_dist = {
+        "totalSteps": 5000,
+        "totalDistanceMeters": "invalid_dist",
+        "restingHeartRate": 60,
+    }
+    summary2 = _parse_user_summary(invalid_str_dist)
+    assert summary2["steps"] == 5000
+    assert summary2["distance_km"] is None
+
+
+
 
 

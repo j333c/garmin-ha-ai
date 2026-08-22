@@ -10,9 +10,12 @@ from custom_components.garmin_ha_ai.frontend import (
     FRONTEND_FILE_PATH,
     FRONTEND_URL,
     FRONTEND_URL_BASE,
-    FRONTEND_URL_VERSIONED,
+    _DEFAULT_VERSION,
     async_setup_frontend,
 )
+
+# Construct the expected versioned URL for test assertions
+EXPECTED_FRONTEND_URL_VERSIONED = f"{FRONTEND_URL}?v={_DEFAULT_VERSION}"
 
 
 async def test_frontend_js_file_exists_and_contains_custom_cards():
@@ -72,7 +75,7 @@ async def test_async_setup_frontend_registers_static_path_and_extra_js(hass):
         assert call_args[1].path == str(FRONTEND_FILE_PATH)
 
         # Check extra js url was added
-        mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
+        mock_add_js.assert_called_once_with(hass, EXPECTED_FRONTEND_URL_VERSIONED)
 
 
 async def test_async_setup_frontend_idempotent(hass):
@@ -104,7 +107,7 @@ async def test_async_setup_frontend_fallback_register_static_path(hass):
             str(FRONTEND_DIR),
             cache_headers=False,
         )
-        mock_add_js.assert_called_once_with(hass, FRONTEND_URL_VERSIONED)
+        mock_add_js.assert_called_once_with(hass, EXPECTED_FRONTEND_URL_VERSIONED)
 
 
 async def test_async_setup_frontend_handles_exceptions_gracefully(hass):

@@ -402,3 +402,43 @@ def test_openai_provider_url_validation_and_ssrf_blocking() -> None:
     with pytest.raises(AIEngineClientError, match="Access to cloud metadata service"):
         validate_base_url("http://metadata.google.internal/computeMetadata/v1")
 
+
+def test_gemini_format_error_dict_payload() -> None:
+    """Test _format_gemini_error unpacks dictionary message structures correctly."""
+    from custom_components.garmin_ha_ai.ai_engine.gemini import _format_gemini_error
+
+    # Exception where .message is a dictionary
+    mock_err = MagicMock(spec=Exception)
+    mock_err.code = 429
+    mock_err.message = {"message": "Resource exhausted in region us-central1", "status": "RESOURCE_EXHAUSTED"}
+
+    code, clean_msg = _format_gemini_error(mock_err)
+    assert code == 429
+    assert "quota or rate limit exceeded" in clean_msg
+    assert "Resource exhausted in region us-central1" in clean_msg
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_sanitizes_error_messages() -> None:
+    """Test OpenAIProvider truncates and sanitizes long error messages to avoid health data leaks."""
+    from custom_components.garmin_ha_ai.ai_engine.base import AIEngineClientError
+
+    provider = OpenAIProvider(api_key="fake_openai_key")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    # Long error containing potential prompt echo
+    mock_response.text = "Bad Request: prompt echo [user steps: 15000, sleep: 85] " + ("x" * 500)
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_response
+
+        with pytest.raises(AIEngineClientError) as exc_info:
+            await provider.async_generate_response("Test prompt")
+
+        # Must be truncated to at most 200 chars in the message payload
+        err_str = str(exc_info.value)
+        assert "400" in err_str
+        assert len(err_str) < 300
+
+

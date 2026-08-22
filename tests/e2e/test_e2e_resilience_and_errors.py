@@ -54,7 +54,7 @@ async def test_e2e_reauth_lifecycle_on_session_expiration(hass: HomeAssistant) -
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_fetch_daily_metrics",
         new_callable=AsyncMock,
         return_value=mock_metrics,
-    ), patch("custom_components.garmin_ha_ai.storage.GarminStorage.async_save_daily_metrics", new_callable=AsyncMock):
+    ), patch("custom_components.garmin_ha_ai.storage.GarminStorage.async_save_and_prune_history", new_callable=AsyncMock):
         assert await async_setup_entry(hass, entry) is True
 
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
@@ -118,7 +118,7 @@ async def test_e2e_garmin_network_outage_resilience(hass: HomeAssistant) -> None
     entry.options = {}
 
     storage = MagicMock()
-    storage.async_save_daily_metrics = AsyncMock()
+    storage.async_save_and_prune_history = AsyncMock()
     client = MagicMock()
     client.async_fetch_daily_metrics = AsyncMock(
         side_effect=GarminConnectConnectionError("Garmin servers unreachable")

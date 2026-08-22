@@ -57,3 +57,17 @@ def test_text_entity_native_value_and_set_value() -> None:
         mock_coordinator.set_question_input.assert_called_once_with("New question for AI?")
 
     asyncio.run(run())
+
+
+def test_text_entity_long_value_truncation() -> None:
+    """Test GarminAIQuestionTextEntity truncates questions exceeding 250 chars for state safety."""
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry_id"
+    mock_coordinator = MagicMock()
+    mock_coordinator.question_input = "A" * 300
+
+    text_entity = GarminAIQuestionTextEntity(mock_coordinator, mock_entry)
+    # native_value must be capped at 250 chars
+    assert len(text_entity.native_value) == 250
+    assert text_entity.native_value.endswith("...")
+
