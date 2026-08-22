@@ -4,7 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.5.0--rc3-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.0-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
 
 A privacy-first, subscription-free **Home Assistant custom integration** that pulls your daily health and performance metrics from **Garmin Connect** and delivers personalized, context-aware AI coaching briefings and interactive health intelligence.
 
@@ -16,20 +16,33 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 
 ## 🌟 Highlights
 
-* **🔄 Automated Metric Sync**: Seamlessly syncs Sleep Score, Body Battery, Stress Level, Resting Heart Rate, HRV, Steps, Weight, and logged workout activities.
+* **📊 7-Day Pre-Computed Trend Analytics & Baselines**:
+  * Deterministic rolling 7-day averages for Sleep, Resting HR, Stress, Steps, and Calories.
+  * Real-time trend deltas vs. 7-day averages and personal goals.
+  * HRV trend classification (Stable, Improving, Declining, Low).
+  * Rich activity parsing with training effect (aerobic/anaerobic) and heart rate zone extraction.
+* **🔄 Automated & Flexible Polling Cadence**:
+  * **Dual-Mode Polling**: Choose between **Daily Fixed Time** (e.g. 06:00) or **Periodic Intervals** (every 1, 3, 6, 12, or 24 hours).
+* **👥 Multi-Account & Multi-Member Household Isolation**:
+  * Run multiple Garmin Connect accounts concurrently with independent credential storage, rolling histories, personas, and dedicated device registries.
+* **🎨 Packaged Lovelace Custom Cards (`custom:garmin-ha-ai-card`)**:
+  * Animated circular SVG gauges (Body Battery, Sleep Score, Stress, HRV, Resting HR, Steps).
+  * Instant tab toggle between Executive Daily Summary and Deep Briefing Markdown reports.
+  * Embedded interactive Q&A chat drawer with live answer streams.
+* **🌐 100% Comprehensive Localization**:
+  * Complete English (`en.json`) and German (`de.json`) translations for config flows, option forms, entity names, selectors, and service descriptions.
+* **🛡️ Centralized Exception Taxonomy & Resilience**:
+  * Structured error taxonomy (`GarminError`, `AIEngineError`, `GarminRateLimitError`) preventing unhandled crashes and isolating 429 quota exhaustion.
 * **🧠 Pluggable AI Engine (Radio-Button Selection & Dynamic Discovery)**:
   * **Google Gemini SDK** (e.g., `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash`) with dynamic model discovery.
   * **OpenAI & OpenAI-Compatible Endpoints** (e.g., `gpt-4o`, `gpt-4o-mini`, `o1`, `o3-mini`, or local endpoints like Ollama, LM Studio, vLLM, LocalAI, Groq) with dynamic `/models` endpoint discovery.
 * **🎯 5-Block Context Assembler**: AI recommendations are strictly grounded in your **rolling local metric history (up to 90 days)**, current recovery state, personalized **fitness goals**, and custom **coaching tone directives**.
 * **💬 Interactive AI Health Coach**: Ask ad-hoc coaching questions via Home Assistant service calls (`garmin_ha_ai.ask_question`) or interactive dashboard buttons.
 * **📲 Multi-Channel Notifications**: Receive your customized daily morning health briefing via Home Assistant Companion App mobile push notifications and persistent notifications.
-* **🔒 Privacy & Local History Grounding**:
+* **🔒 Privacy & Local Storage Grounding**:
   * Passwords are never logged or stored in plain text.
   * OAuth session tokens are safely persisted in Home Assistant `.storage`.
   * AI analysis queries historical data from your local rolling storage (`garmin_ha_ai_history.json`), drastically minimizing cloud requests to Garmin.
-* **🛡️ Home Assistant Standards Compliant**:
-  * Enforces state character limits (<=250 chars in entity state, full Markdown reports stored in extra state attributes).
-  * Full UI config flow, reauth flow, and options flow with English localization.
 
 ---
 

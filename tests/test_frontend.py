@@ -24,17 +24,20 @@ async def test_frontend_js_file_exists_and_contains_custom_cards():
     content = FRONTEND_FILE_PATH.read_text(encoding="utf-8")
 
     # Check custom element definitions
+    assert "garmin-ha-ai-card" in content
     assert "garmin-ha-ai-qa-card" in content
     assert "garmin-ha-ai-report-card" in content
     assert "garmin-ha-ai-overview-card" in content
 
     # Check custom card editor definitions
+    assert "garmin-ha-ai-card-editor" in content
     assert "garmin-ha-ai-qa-card-editor" in content
     assert "garmin-ha-ai-report-card-editor" in content
     assert "garmin-ha-ai-overview-card-editor" in content
 
     # Check window.customCards card picker registration
     assert "window.customCards" in content
+    assert "Garmin HA AI Main Card" in content
     assert "Garmin AI Coach Q&A" in content
     assert "Garmin AI Health Report" in content
     assert "Garmin AI Health Overview" in content

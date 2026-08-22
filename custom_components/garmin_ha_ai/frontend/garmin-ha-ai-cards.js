@@ -1383,6 +1383,432 @@
     }
   }
 
+  /**
+   * 4. Comprehensive Packaged Custom Card (custom:garmin-ha-ai-card)
+   * Featuring SVG circular gauges, expandable health briefings, and interactive Q&A chat drawer.
+   */
+  class GarminHAIPackagedCard extends GarminCardBase {
+    constructor() {
+      super();
+      this._activeTab = "summary";
+      this._chatHistory = [];
+    }
+
+    static getConfigElement() {
+      return document.createElement("garmin-ha-ai-card-editor");
+    }
+
+    static getStubConfig(hass) {
+      return {
+        type: "custom:garmin-ha-ai-card",
+        title: "Garmin AI Coach",
+        sleep_entity: smartFindEntity(hass, "sensor", ["sleep_score", "garmin_sleep_score"]),
+        battery_entity: smartFindEntity(hass, "sensor", ["body_battery", "garmin_body_battery"]),
+        stress_entity: smartFindEntity(hass, "sensor", ["avg_stress", "garmin_stress"]),
+        hrv_entity: smartFindEntity(hass, "sensor", ["hrv_status", "garmin_hrv"]),
+        hr_entity: smartFindEntity(hass, "sensor", ["resting_hr", "garmin_resting_heart_rate"]),
+        steps_entity: smartFindEntity(hass, "sensor", ["steps", "garmin_steps"]),
+        short_report_entity: smartFindEntity(hass, "sensor", ["ai_health_report_short", "health_report_short"]),
+        long_report_entity: smartFindEntity(hass, "sensor", ["ai_health_report_long", "health_report_long"]),
+        generate_button_entity: smartFindEntity(hass, "button", ["generate_report", "generate_ai_health_report"]),
+        question_entity: smartFindEntity(hass, "text", ["question_input", "garmin_ai_question"]),
+        ask_button_entity: smartFindEntity(hass, "button", ["ask_question", "ask_ai_question"]),
+        answer_entity: smartFindEntity(hass, "sensor", ["ai_last_answer", "last_answer"]),
+      };
+    }
+
+    _renderCircularGauge(value, maxVal, label, unit, color) {
+      const radius = 24;
+      const stroke = 4;
+      const num = typeof value === "number" ? Math.max(0, Math.min(value, maxVal)) : 0;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (num / maxVal) * circumference;
+      const displayVal = value !== null && value !== undefined && !isNaN(value) ? `${value}${unit}` : "--";
+
+      return `
+        <div class="garmin-gauge-item">
+          <div class="garmin-gauge-svg-wrap">
+            <svg class="garmin-gauge-svg" width="60" height="60" viewBox="0 0 60 60">
+              <circle class="garmin-gauge-bg" cx="30" cy="30" r="${radius}" stroke-width="${stroke}" />
+              <circle class="garmin-gauge-fill" cx="30" cy="30" r="${radius}" stroke-width="${stroke}"
+                stroke="${color}" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" />
+            </svg>
+            <div class="garmin-gauge-center-val" style="color:${color}">${displayVal}</div>
+          </div>
+          <div class="garmin-gauge-label">${label}</div>
+        </div>
+      `;
+    }
+
+    _render() {
+      if (!this.shadowRoot) return;
+
+      const title = this._config.title || "Garmin AI Coach";
+      const sleepEnt = this._config.sleep_entity || smartFindEntity(this._hass, "sensor", ["sleep_score"]);
+      const battEnt = this._config.battery_entity || smartFindEntity(this._hass, "sensor", ["body_battery"]);
+      const stressEnt = this._config.stress_entity || smartFindEntity(this._hass, "sensor", ["avg_stress"]);
+      const hrvEnt = this._config.hrv_entity || smartFindEntity(this._hass, "sensor", ["hrv_status"]);
+      const hrEnt = this._config.hr_entity || smartFindEntity(this._hass, "sensor", ["resting_hr"]);
+      const stepsEnt = this._config.steps_entity || smartFindEntity(this._hass, "sensor", ["steps"]);
+
+      const sleepVal = this._parseNumericState(sleepEnt);
+      const battVal = this._parseNumericState(battEnt);
+      const stressVal = this._parseNumericState(stressEnt);
+      const hrVal = this._parseNumericState(hrEnt);
+      const stepsVal = this._parseNumericState(stepsEnt);
+
+      const hrvState = hrvEnt && this._hass?.states ? this._hass.states[hrvEnt] : undefined;
+      const hrvVal = hrvState && hrvState.state !== "unavailable" && hrvState.state !== "unknown" ? hrvState.state : "BALANCED";
+
+      const sleepColor = sleepVal >= 80 ? "#10B981" : sleepVal >= 60 ? "#F59E0B" : "#EF4444";
+      const battColor = battVal >= 60 ? "#10B981" : battVal >= 30 ? "#F59E0B" : "#EF4444";
+      const stressColor = stressVal <= 25 ? "#10B981" : stressVal <= 50 ? "#F59E0B" : "#EF4444";
+
+      const shortEnt = this._config.short_report_entity || smartFindEntity(this._hass, "sensor", ["ai_health_report_short"]);
+      const longEnt = this._config.long_report_entity || smartFindEntity(this._hass, "sensor", ["ai_health_report_long"]);
+      const shortState = shortEnt && this._hass?.states ? this._hass.states[shortEnt] : undefined;
+      const longState = longEnt && this._hass?.states ? this._hass.states[longEnt] : undefined;
+
+      const summaryText = shortState?.attributes?.full_report || shortState?.attributes?.short_summary || shortState?.state || "No daily summary generated yet.";
+      const fullReportText = longState?.attributes?.full_report || longState?.attributes?.short_summary || longState?.state || "No full report generated yet.";
+
+      const ansEnt = this._config.answer_entity || smartFindEntity(this._hass, "sensor", ["ai_last_answer"]);
+      const ansState = ansEnt && this._hass?.states ? this._hass.states[ansEnt] : undefined;
+      const ansText = ansState?.attributes?.full_answer || ansState?.state || "";
+
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host {
+            display: block;
+          }
+          ha-card {
+            padding: 16px;
+            border-radius: var(--ha-card-border-radius, 12px);
+            background: var(--ha-card-background, var(--card-background-color, #fff));
+            box-shadow: var(--ha-card-box-shadow, none);
+            color: var(--primary-text-color, #212121);
+            font-family: var(--paper-font-body1_-_font-family, inherit);
+          }
+          .garmin-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+          }
+          .garmin-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .garmin-refresh-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--primary-color, #03a9f4);
+            padding: 6px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+          }
+          .garmin-refresh-btn:hover {
+            background: rgba(3, 169, 244, 0.1);
+          }
+          .garmin-gauge-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+            background: var(--secondary-background-color, rgba(0,0,0,0.03));
+            padding: 12px;
+            border-radius: 10px;
+          }
+          .garmin-gauge-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+          }
+          .garmin-gauge-svg-wrap {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .garmin-gauge-svg {
+            transform: rotate(-90deg);
+          }
+          .garmin-gauge-bg {
+            fill: none;
+            stroke: rgba(128, 128, 128, 0.2);
+          }
+          .garmin-gauge-fill {
+            fill: none;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.6s ease;
+          }
+          .garmin-gauge-center-val {
+            position: absolute;
+            font-size: 0.85rem;
+            font-weight: 700;
+          }
+          .garmin-gauge-label {
+            font-size: 0.75rem;
+            color: var(--secondary-text-color, #757575);
+            margin-top: 4px;
+            font-weight: 500;
+          }
+          .garmin-glance-tiles {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+          }
+          .garmin-tile {
+            background: var(--secondary-background-color, rgba(0,0,0,0.03));
+            padding: 8px 10px;
+            border-radius: 8px;
+            text-align: center;
+          }
+          .garmin-tile-val {
+            font-size: 0.95rem;
+            font-weight: 600;
+          }
+          .garmin-tile-lbl {
+            font-size: 0.7rem;
+            color: var(--secondary-text-color, #757575);
+          }
+          .garmin-tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--divider-color, rgba(128, 128, 128, 0.2));
+            margin-bottom: 12px;
+          }
+          .garmin-tab-btn {
+            background: none;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--secondary-text-color, #757575);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+          }
+          .garmin-tab-btn.active {
+            color: var(--primary-color, #03a9f4);
+            border-bottom-color: var(--primary-color, #03a9f4);
+          }
+          .garmin-briefing-panel {
+            background: var(--secondary-background-color, rgba(0,0,0,0.02));
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 16px;
+          }
+          .garmin-chat-drawer {
+            border-top: 1px solid var(--divider-color, rgba(128, 128, 128, 0.2));
+            padding-top: 12px;
+          }
+          .garmin-chat-header {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .garmin-chat-input-row {
+            display: flex;
+            gap: 8px;
+          }
+          .garmin-chat-input {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--divider-color, rgba(128, 128, 128, 0.3));
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #212121);
+            font-size: 0.85rem;
+          }
+          .garmin-chat-input:focus {
+            outline: none;
+            border-color: var(--primary-color, #03a9f4);
+          }
+          .garmin-chat-btn {
+            background: var(--primary-color, #03a9f4);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+          }
+          .garmin-chat-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          .garmin-chat-answer {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(3, 169, 244, 0.05);
+            border-left: 3px solid var(--primary-color, #03a9f4);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.85rem;
+            line-height: 1.4;
+          }
+        </style>
+
+        <ha-card>
+          <div class="garmin-header">
+            <div class="garmin-title">
+              <span>🏃‍♂️</span> ${title}
+            </div>
+            <button class="garmin-refresh-btn" id="refreshBtn" title="Generate New AI Briefing">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="garmin-gauge-grid">
+            ${this._renderCircularGauge(sleepVal, 100, "Sleep", "", sleepColor)}
+            ${this._renderCircularGauge(battVal, 100, "Battery", "%", battColor)}
+            ${this._renderCircularGauge(stressVal, 100, "Stress", "", stressColor)}
+          </div>
+
+          <div class="garmin-glance-tiles">
+            <div class="garmin-tile">
+              <div class="garmin-tile-val" style="color: #8B5CF6">${hrvVal}</div>
+              <div class="garmin-tile-lbl">HRV Status</div>
+            </div>
+            <div class="garmin-tile">
+              <div class="garmin-tile-val">${hrVal !== null ? `${hrVal} bpm` : "--"}</div>
+              <div class="garmin-tile-lbl">Resting HR</div>
+            </div>
+            <div class="garmin-tile">
+              <div class="garmin-tile-val">${stepsVal !== null ? stepsVal.toLocaleString() : "--"}</div>
+              <div class="garmin-tile-lbl">Daily Steps</div>
+            </div>
+          </div>
+
+          <div class="garmin-tabs">
+            <button class="garmin-tab-btn ${this._activeTab === "summary" ? "active" : ""}" id="tabSummary">Daily Summary</button>
+            <button class="garmin-tab-btn ${this._activeTab === "report" ? "active" : ""}" id="tabReport">Full Briefing</button>
+          </div>
+
+          <div class="garmin-briefing-panel">
+            ${this._activeTab === "summary" ? renderMarkdown(summaryText) : renderMarkdown(fullReportText)}
+          </div>
+
+          <div class="garmin-chat-drawer">
+            <div class="garmin-chat-header">
+              <span>💬</span> AI Health Coach Q&A
+            </div>
+            <div class="garmin-chat-input-row">
+              <input type="text" class="garmin-chat-input" id="chatInput" placeholder="Ask your health coach anything..." />
+              <button class="garmin-chat-btn" id="chatSubmit">Ask</button>
+            </div>
+            ${ansText && ansText !== "unavailable" ? `
+              <div class="garmin-chat-answer">
+                ${renderMarkdown(ansText)}
+              </div>
+            ` : ""}
+          </div>
+        </ha-card>
+      `;
+
+      this._attachEventHandlers();
+    }
+
+    _attachEventHandlers() {
+      const refreshBtn = this.shadowRoot.getElementById("refreshBtn");
+      const tabSummary = this.shadowRoot.getElementById("tabSummary");
+      const tabReport = this.shadowRoot.getElementById("tabReport");
+      const chatInput = this.shadowRoot.getElementById("chatInput");
+      const chatSubmit = this.shadowRoot.getElementById("chatSubmit");
+
+      if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+          this._handleCallService("garmin_ha_ai", "generate_report", {});
+        });
+      }
+
+      if (tabSummary) {
+        tabSummary.addEventListener("click", () => {
+          this._activeTab = "summary";
+          this._render();
+        });
+      }
+
+      if (tabReport) {
+        tabReport.addEventListener("click", () => {
+          this._activeTab = "report";
+          this._render();
+        });
+      }
+
+      const sendQuestion = () => {
+        const q = chatInput?.value?.trim();
+        if (!q) return;
+        this._handleCallService("garmin_ha_ai", "ask_question", { question: q });
+        if (chatInput) chatInput.value = "";
+      };
+
+      if (chatSubmit) {
+        chatSubmit.addEventListener("click", sendQuestion);
+      }
+
+      if (chatInput) {
+        chatInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            sendQuestion();
+          }
+        });
+      }
+    }
+  }
+
+  class GarminHAIPackagedCardEditor extends GarminCardBaseEditor {
+    _getSchema() {
+      return [
+        { name: "title", selector: { text: {} } },
+        { name: "sleep_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "battery_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "stress_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "hrv_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "hr_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "steps_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "short_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "long_report_entity", selector: { entity: { domain: "sensor" } } },
+        { name: "answer_entity", selector: { entity: { domain: "sensor" } } },
+      ];
+    }
+    _getLabels() {
+      return {
+        title: "Card Title",
+        sleep_entity: "Sleep Score Sensor",
+        battery_entity: "Body Battery Sensor",
+        stress_entity: "Stress Level Sensor",
+        hrv_entity: "HRV Status Sensor",
+        hr_entity: "Resting Heart Rate Sensor",
+        steps_entity: "Steps Sensor",
+        short_report_entity: "Short Report Sensor",
+        long_report_entity: "Long Report Sensor",
+        answer_entity: "Last Answer Sensor",
+      };
+    }
+  }
+
   class GarminHAIOverviewCardEditor extends GarminCardBaseEditor {
     _getSchema() {
       return [
@@ -1413,6 +1839,9 @@
   }
 
   // Register Custom Card Elements with the browser
+  if (!customElements.get("garmin-ha-ai-card")) {
+    customElements.define("garmin-ha-ai-card", GarminHAIPackagedCard);
+  }
   if (!customElements.get("garmin-ha-ai-qa-card")) {
     customElements.define("garmin-ha-ai-qa-card", GarminHAIQAQuestionCard);
   }
@@ -1424,6 +1853,9 @@
   }
 
   // Register Custom Card Editor Elements with the browser
+  if (!customElements.get("garmin-ha-ai-card-editor")) {
+    customElements.define("garmin-ha-ai-card-editor", GarminHAIPackagedCardEditor);
+  }
   if (!customElements.get("garmin-ha-ai-qa-card-editor")) {
     customElements.define("garmin-ha-ai-qa-card-editor", GarminHAIQAQuestionCardEditor);
   }
@@ -1438,6 +1870,12 @@
   window.customCards = window.customCards || [];
 
   const cardsToRegister = [
+    {
+      type: "garmin-ha-ai-card",
+      name: "Garmin HA AI Main Card",
+      description: "All-in-one Lovelace card with animated gauges, health briefing tabs, and interactive Q&A chat drawer.",
+      documentationURL: "https://github.com/j333c/garmin-ha-ai",
+    },
     {
       type: "garmin-ha-ai-qa-card",
       name: "Garmin AI Coach Q&A",
@@ -1470,7 +1908,7 @@
   }
 
   console.info(
-    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.5.0-rc3) ",
+    "%c GARMIN-HA-AI %c Custom Lovelace Cards Loaded (v0.6.0) ",
     "color: white; background: #03a9f4; font-weight: 700; border-radius: 3px 0 0 3px;",
     "color: #03a9f4; background: rgba(3, 169, 244, 0.1); font-weight: 700; border-radius: 0 3px 3px 0;"
   );

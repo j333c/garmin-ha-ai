@@ -18,7 +18,7 @@ FRONTEND_FILE_PATH = FRONTEND_DIR / FRONTEND_JS_FILE
 MANIFEST_PATH = Path(__file__).parent / "manifest.json"
 
 # Default fallback version for cache-busting query parameter in Lovelace
-_DEFAULT_VERSION = "0.5.0-rc3"
+_DEFAULT_VERSION = "0.6.0"
 
 _FRONTEND_REGISTERED = False
 
