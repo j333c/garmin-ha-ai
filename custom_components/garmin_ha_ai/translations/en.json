@@ -55,7 +55,8 @@
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API Key",
           "ai_model": "AI Model",
-          "ai_base_url": "AI Base URL (for generic OpenAI/local endpoints)"
+          "ai_base_url": "AI Base URL (for generic OpenAI/local endpoints)",
+          "ai_language": "AI Response Language"
         }
       }
     }

@@ -10,6 +10,7 @@ from ..analytics import (
     calculate_baseline_analytics,
     format_baseline_analytics_block,
 )
+from ..const import SUPPORTED_LANGUAGE_NAMES
 from ..helpers import truncate_entity_state
 from ..models import AIHealthReport, GarminDailyMetrics
 
@@ -24,6 +25,37 @@ DEFAULT_COACHING_DIRECTIVES = (
     "Provide evidence-based, actionable, and encouraging health coaching recommendations. "
     "Focus on sleep quality, stress management, and appropriate workout intensity."
 )
+
+def resolve_target_language(language: str | None = None, hass: Any = None) -> str:
+    """Resolve the human-readable target language for AI responses.
+
+    If language is 'system' or None, attempts to detect Home Assistant system language
+    from hass.config.language, falling back to 'English' if unmapped or unavailable.
+    """
+    if not isinstance(language, str) or not language.strip():
+        selected = "system"
+    else:
+        selected = language.strip().lower()
+
+    if selected == "system":
+        sys_lang = getattr(getattr(hass, "config", None), "language", None)
+        if sys_lang and isinstance(sys_lang, str) and sys_lang.strip():
+            # Handle regional locale tags (e.g., 'de_DE' or 'de-DE' -> 'de')
+            base_code = sys_lang.strip().replace("_", "-").split("-")[0].lower()
+            return SUPPORTED_LANGUAGE_NAMES.get(base_code, "English")
+        return "English"
+
+    # Exact 2-letter ISO code match (e.g., 'de', 'fr')
+    if len(selected) == 2 and selected in SUPPORTED_LANGUAGE_NAMES:
+        return SUPPORTED_LANGUAGE_NAMES[selected]
+
+    # Full language name match (e.g., 'german', 'deutsch')
+    for code, name in SUPPORTED_LANGUAGE_NAMES.items():
+        if selected == name.lower():
+            return name
+
+    return "English"
+
 
 
 def sanitize_prompt_input(text: str | None) -> str:
@@ -254,6 +286,8 @@ def assemble_report_prompt(
     user_goals: str | None = None,
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
+    language: str | None = None,
+    hass: Any = None,
 ) -> str:
     """Assemble 5-block prompt payload for daily AI Health Briefing generation.
 
@@ -291,6 +325,7 @@ def assemble_report_prompt(
     block4_content = sanitized_directives or DEFAULT_COACHING_DIRECTIVES
 
     # Block 5: Structural Output Formatting Rules
+    target_lang = resolve_target_language(language=language, hass=hass)
     block5_content = (
         "IMPORTANT OUTPUT FORMATTING RULES:\n"
         "1. You MUST start your response with a concise 1-2 sentence summary enclosed in <summary>...</summary> tags.\n"
@@ -303,7 +338,8 @@ def assemble_report_prompt(
         "   - ## Activity & Performance\n"
         "   - ## Actionable Recommendations for Tomorrow\n"
         "4. Ground recommendations using the pre-computed 7-day baseline averages and trend deltas provided in Block 2.\n"
-        "5. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep."
+        "5. If any metrics are marked 'Pending sync', state that synchronization may be in progress rather than assuming zero activity or missing sleep.\n"
+        f"6. LANGUAGE REQUIREMENT: You MUST generate the entire response (including the <summary>...</summary> text and all markdown sections) strictly in {target_lang}. Do not output in any other language."
     )
 
     # Assemble into full structured context string
@@ -329,6 +365,8 @@ def assemble_qa_prompt(
     user_goals: str | None = None,
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
+    language: str | None = None,
+    hass: Any = None,
 ) -> str:
     """Assemble prompt payload for interactive Q&A session.
 
@@ -358,6 +396,7 @@ def assemble_qa_prompt(
 
     block_goals = sanitized_goals or DEFAULT_USER_GOALS
     block_directives = sanitized_directives or DEFAULT_COACHING_DIRECTIVES
+    target_lang = resolve_target_language(language=language, hass=hass)
 
     prompt = (
         f"### USER QUESTION\n"
@@ -371,7 +410,8 @@ def assemble_qa_prompt(
         "### INSTRUCTIONS FOR RESPONSE:\n"
         "1. Provide a clear, evidence-based, concise answer directly addressing the user's question.\n"
         "2. Ground your recommendations using the provided historical health metrics, computed baselines, and user goals.\n"
-        "3. Keep the tone encouraging, supportive, and actionable."
+        "3. Keep the tone encouraging, supportive, and actionable.\n"
+        f"4. LANGUAGE REQUIREMENT: You MUST answer strictly in {target_lang}, regardless of the language used in the question."
     )
 
     return prompt

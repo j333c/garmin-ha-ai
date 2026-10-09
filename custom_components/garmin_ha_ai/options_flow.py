@@ -12,8 +12,10 @@ from homeassistant.helpers import selector
 
 from .ai_engine import async_list_gemini_models, async_list_openai_models
 from .const import (
+    AI_LANGUAGE_OPTIONS,
     CONF_AI_API_KEY,
     CONF_AI_BASE_URL,
+    CONF_AI_LANGUAGE,
     CONF_AI_MODEL,
     CONF_AI_PROVIDER,
     CONF_COACHING_DIRECTIVES,
@@ -23,6 +25,7 @@ from .const import (
     CONF_POLLING_MODE,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
+    DEFAULT_AI_LANGUAGE,
     DEFAULT_AI_MODEL_GEMINI,
     DEFAULT_AI_MODEL_OPENAI,
     DEFAULT_AI_PROVIDER,
@@ -118,6 +121,13 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
         # Ensure currently selected model is included in dropdown options
         if current_model and current_model not in available_models:
             available_models.insert(0, current_model)
+
+        current_ai_lang = current_options.get(
+            CONF_AI_LANGUAGE,
+            current_data.get(CONF_AI_LANGUAGE, DEFAULT_AI_LANGUAGE),
+        )
+        if current_ai_lang not in AI_LANGUAGE_OPTIONS:
+            current_ai_lang = DEFAULT_AI_LANGUAGE
 
         # Schema defining available configuration settings in UI
         options_schema = vol.Schema(
@@ -220,6 +230,18 @@ class GarminHaAiOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_AI_BASE_URL, current_data.get(CONF_AI_BASE_URL, "")
                     ),
                 ): str,
+                vol.Optional(
+                    CONF_AI_LANGUAGE,
+                    default=current_ai_lang,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=code, label=label)
+                            for code, label in AI_LANGUAGE_OPTIONS.items()
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 

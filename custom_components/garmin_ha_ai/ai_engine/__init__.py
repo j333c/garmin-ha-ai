@@ -23,6 +23,7 @@ from .prompt import (
     assemble_qa_prompt,
     assemble_report_prompt,
     parse_ai_health_report,
+    resolve_target_language,
     truncate_history_context,
 )
 
@@ -40,6 +41,7 @@ __all__ = [
     "assemble_report_prompt",
     "assemble_qa_prompt",
     "parse_ai_health_report",
+    "resolve_target_language",
     "truncate_history_context",
 ]
 

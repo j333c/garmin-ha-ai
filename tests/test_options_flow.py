@@ -10,11 +10,13 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.garmin_ha_ai.config_flow import GarminHaAiConfigFlow
 from custom_components.garmin_ha_ai.const import (
+    CONF_AI_LANGUAGE,
     CONF_COACHING_DIRECTIVES,
     CONF_FITNESS_GOALS,
     CONF_NOTIFICATION_TARGETS,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
+    DEFAULT_AI_LANGUAGE,
     DEFAULT_POLLING_TIME,
     DEFAULT_RETENTION_DAYS,
     DOMAIN,
@@ -193,5 +195,84 @@ async def test_options_flow_openai_model_discovery(hass: HomeAssistant) -> None:
         mock_list.assert_called_once_with(
             "openai_api_key", base_url="http://localhost:11434/v1", hass=hass
         )
+
+
+@pytest.mark.asyncio
+async def test_options_flow_language_selection(hass: HomeAssistant) -> None:
+    """Test options flow allows selecting AI language and persists it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garmin Test",
+        data={"username": "testuser", "ai_provider": "gemini", "ai_api_key": "key"},
+        options={},
+    )
+    entry.add_to_hass(hass)
+
+    flow = GarminHaAiOptionsFlowHandler(entry)
+    flow.hass = hass
+
+    with patch(
+        "custom_components.garmin_ha_ai.options_flow.vol.Optional",
+        wraps=vol.Optional,
+    ) as mock_opt:
+        result = await flow.async_step_init(user_input=None)
+        assert result["type"] == "form"
+        schema = result["data_schema"]
+
+        schema_dict = schema.__closure__[0].cell_contents if schema.__closure__ else {}
+        assert CONF_AI_LANGUAGE in schema_dict
+        selector_config = schema_dict[CONF_AI_LANGUAGE].config
+        options_values = [opt["value"] for opt in selector_config.options]
+        assert "system" in options_values
+        assert "de" in options_values
+        assert "en" in options_values
+
+        ai_lang_calls = [
+            c for c in mock_opt.call_args_list if c.args and c.args[0] == CONF_AI_LANGUAGE
+        ]
+        assert len(ai_lang_calls) == 1
+        assert ai_lang_calls[0].kwargs.get("default") == DEFAULT_AI_LANGUAGE
+
+    # Save language selection
+    save_result = await flow.async_step_init(
+        user_input={
+            CONF_RETENTION_DAYS: 30,
+            CONF_AI_LANGUAGE: "de",
+        }
+    )
+    assert save_result["type"] == "create_entry"
+    assert save_result["data"][CONF_AI_LANGUAGE] == "de"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_invalid_language_fallback(hass: HomeAssistant) -> None:
+    """Test options flow gracefully falls back to DEFAULT_AI_LANGUAGE for invalid stored option."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Garmin Test",
+        data={"username": "testuser", "ai_provider": "gemini", "ai_api_key": "key"},
+        options={CONF_AI_LANGUAGE: "invalid_unsupported_lang"},
+    )
+    entry.add_to_hass(hass)
+
+    flow = GarminHaAiOptionsFlowHandler(entry)
+    flow.hass = hass
+
+    with patch(
+        "custom_components.garmin_ha_ai.options_flow.vol.Optional",
+        wraps=vol.Optional,
+    ) as mock_opt:
+        result = await flow.async_step_init(user_input=None)
+        assert result["type"] == "form"
+
+        ai_lang_calls = [
+            c for c in mock_opt.call_args_list if c.args and c.args[0] == CONF_AI_LANGUAGE
+        ]
+        assert len(ai_lang_calls) == 1
+        assert ai_lang_calls[0].kwargs.get("default") == DEFAULT_AI_LANGUAGE
+
+
+
+
 
 

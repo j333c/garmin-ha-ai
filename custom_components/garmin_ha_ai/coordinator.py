@@ -33,6 +33,7 @@ from .ai_engine import (
 from .const import (
     CONF_AI_API_KEY,
     CONF_AI_BASE_URL,
+    CONF_AI_LANGUAGE,
     CONF_AI_MODEL,
     CONF_AI_PROVIDER,
     CONF_COACHING_DIRECTIVES,
@@ -42,6 +43,7 @@ from .const import (
     CONF_POLLING_MODE,
     CONF_POLLING_SCHEDULE,
     CONF_RETENTION_DAYS,
+    DEFAULT_AI_LANGUAGE,
     DEFAULT_AI_PROVIDER,
     DEFAULT_POLLING_INTERVAL_HOURS,
     DEFAULT_POLLING_MODE,
@@ -236,6 +238,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             base_url = options.get(CONF_AI_BASE_URL)
             goals = options.get(CONF_FITNESS_GOALS)
             directives = options.get(CONF_COACHING_DIRECTIVES)
+            language = options.get(CONF_AI_LANGUAGE, DEFAULT_AI_LANGUAGE)
 
             if not api_key:
                 LOGGER.warning("AI provider API key is not configured; skipping report generation")
@@ -247,6 +250,8 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
                 history=history_data,
                 user_goals=goals,
                 coaching_directives=directives,
+                language=language,
+                hass=self.hass,
             )
 
             # Instantiate pluggable AI provider driver
@@ -339,11 +344,14 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             history_list = [history_dict[d] for d in recent_dates]
 
         # Assemble interactive Q&A prompt
+        language = options.get(CONF_AI_LANGUAGE, DEFAULT_AI_LANGUAGE)
         prompt = assemble_qa_prompt(
             question=target_question,
             history=history_list,
             user_goals=goals,
             coaching_directives=directives,
+            language=language,
+            hass=self.hass,
         )
 
         try:

@@ -11,8 +11,10 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.garmin_ha_ai.const import (
     CONF_AI_API_KEY,
+    CONF_AI_LANGUAGE,
     CONF_AI_PROVIDER,
     CONF_NOTIFICATION_TARGETS,
+    DEFAULT_AI_LANGUAGE,
 )
 from custom_components.garmin_ha_ai.coordinator import GarminDataUpdateCoordinator
 from custom_components.garmin_ha_ai.models import AIHealthReport, GarminDailyMetrics
@@ -551,6 +553,87 @@ async def test_coordinator_multi_day_window_and_weight_carryover(hass: HomeAssis
     assert calls[1].kwargs.get("fallback_weight") == 76.5
     # Storage should be updated twice (yesterday + today)
     assert mock_storage.async_save_and_prune_history.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_coordinator_report_and_qa_language_forwarding(hass: HomeAssistant) -> None:
+    """Test coordinator passes configured CONF_AI_LANGUAGE to prompt assemblers."""
+    mock_entry = MagicMock()
+    mock_entry.options = {
+        CONF_AI_PROVIDER: "gemini",
+        CONF_AI_API_KEY: "valid_key",
+        CONF_AI_LANGUAGE: "de",
+    }
+    mock_entry.data = {}
+
+    mock_client = MagicMock()
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        return_value=GarminDailyMetrics(date="2026-10-09", steps=10000)
+    )
+    mock_storage = MagicMock()
+    mock_storage.async_load_history = AsyncMock(
+        return_value={"2026-10-09": {"steps": 10000}}
+    )
+    mock_storage.async_save_and_prune_history = AsyncMock()
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+    coordinator.data = GarminDailyMetrics(date="2026-10-09", steps=10000)
+
+    mock_provider = AsyncMock()
+    mock_provider.async_generate_response = AsyncMock(
+        return_value="<summary>Bericht</summary>\nVollständiger Bericht"
+    )
+
+    # 1. Test generate_report passes language="de" and hass to assemble_report_prompt
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ), patch(
+        "custom_components.garmin_ha_ai.coordinator.assemble_report_prompt"
+    ) as mock_report_assembler:
+        mock_report_assembler.return_value = "prompt"
+        await coordinator.async_generate_report(force=True)
+
+        assert mock_report_assembler.call_args.kwargs.get("language") == "de"
+        assert mock_report_assembler.call_args.kwargs.get("hass") is hass
+
+    # 2. Test ask_question passes language="de" and hass to assemble_qa_prompt
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ), patch(
+        "custom_components.garmin_ha_ai.coordinator.assemble_qa_prompt"
+    ) as mock_qa_assembler:
+        mock_qa_assembler.return_value = "qa prompt"
+        await coordinator.async_ask_question("Wie war mein Schlaf?")
+
+        assert mock_qa_assembler.call_args.kwargs.get("language") == "de"
+        assert mock_qa_assembler.call_args.kwargs.get("hass") is hass
+
+    # 3. Test coordinator falls back to DEFAULT_AI_LANGUAGE when options lack CONF_AI_LANGUAGE
+    mock_entry.options = {
+        CONF_AI_PROVIDER: "gemini",
+        CONF_AI_API_KEY: "valid_key",
+    }
+    with patch(
+        "custom_components.garmin_ha_ai.coordinator.get_ai_provider",
+        return_value=mock_provider,
+    ), patch(
+        "custom_components.garmin_ha_ai.coordinator.assemble_report_prompt"
+    ) as mock_report_assembler, patch(
+        "custom_components.garmin_ha_ai.coordinator.assemble_qa_prompt"
+    ) as mock_qa_assembler:
+        mock_report_assembler.return_value = "prompt"
+        mock_qa_assembler.return_value = "qa prompt"
+
+        await coordinator.async_generate_report(force=True)
+        assert mock_report_assembler.call_args.kwargs.get("language") == DEFAULT_AI_LANGUAGE
+
+        await coordinator.async_ask_question("Any update?")
+        assert mock_qa_assembler.call_args.kwargs.get("language") == DEFAULT_AI_LANGUAGE
+
 
 
 

@@ -39,6 +39,29 @@ CONF_AI_PROVIDER: Final[str] = "ai_provider"
 CONF_AI_API_KEY: Final[str] = "ai_api_key"
 CONF_AI_MODEL: Final[str] = "ai_model"
 CONF_AI_BASE_URL: Final[str] = "ai_base_url"
+CONF_AI_LANGUAGE: Final[str] = "ai_language"
+DEFAULT_AI_LANGUAGE: Final[str] = "system"
+
+AI_LANGUAGE_OPTIONS: Final[dict[str, str]] = {
+    "system": "System Default",
+    "en": "English",
+    "de": "German (Deutsch)",
+    "fr": "French (Français)",
+    "es": "Spanish (Español)",
+    "it": "Italian (Italiano)",
+    "nl": "Dutch (Nederlands)",
+}
+
+SUPPORTED_LANGUAGE_NAMES: Final[dict[str, str]] = {
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "it": "Italian",
+    "nl": "Dutch",
+}
+
+
 
 # Configuration Keys - Preferences & Preferences Updates
 CONF_POLLING_SCHEDULE: Final[str] = "polling_schedule"

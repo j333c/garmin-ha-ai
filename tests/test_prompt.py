@@ -4,8 +4,11 @@ from __future__ import annotations
 from custom_components.garmin_ha_ai.ai_engine.prompt import (
     DEFAULT_COACHING_DIRECTIVES,
     DEFAULT_USER_GOALS,
+    assemble_qa_prompt,
     assemble_report_prompt,
     format_daily_metrics_block,
+    parse_ai_health_report,
+    resolve_target_language,
     truncate_history_context,
 )
 from custom_components.garmin_ha_ai.models import GarminDailyMetrics
@@ -234,6 +237,141 @@ def test_format_daily_metrics_block_hr_zones() -> None:
     )
     block = format_daily_metrics_block(metrics)
     assert "HR Zones: [Zone 2: 1800, Zone 3: 1200]" in block
+
+
+def test_resolve_target_language() -> None:
+    """Test target language resolution for various language codes and system fallback."""
+    assert resolve_target_language("de") == "German"
+    assert resolve_target_language("DE") == "German"
+    assert resolve_target_language("german") == "German"
+    assert resolve_target_language("en") == "English"
+    assert resolve_target_language("fr") == "French"
+    assert resolve_target_language("es") == "Spanish"
+    assert resolve_target_language("it") == "Italian"
+    assert resolve_target_language("nl") == "Dutch"
+    assert resolve_target_language("unknown") == "English"
+    assert resolve_target_language(None) == "English"
+    assert resolve_target_language("system", hass=None) == "English"
+
+    # Edge cases: non-string and whitespace
+    assert resolve_target_language(123) == "English"  # type: ignore
+    assert resolve_target_language(True) == "English"  # type: ignore
+    assert resolve_target_language("   ") == "English"
+
+    # Edge case: prefix matching prevention (e.g. esperanto, estonian, delaware)
+    assert resolve_target_language("esperanto") == "English"
+    assert resolve_target_language("estonian") == "English"
+    assert resolve_target_language("delaware") == "English"
+
+    # Mock Home Assistant instance with config.language
+    class MockConfig:
+        language = "de"
+
+    class MockHass:
+        config = MockConfig()
+
+    assert resolve_target_language("system", hass=MockHass()) == "German"
+    assert resolve_target_language("   ", hass=MockHass()) == "German"
+
+    MockHass.config.language = "fr"
+    assert resolve_target_language("system", hass=MockHass()) == "French"
+
+    # Regional locale tags (e.g. de_DE, de-AT, fr-CA)
+    MockHass.config.language = "de_DE"
+    assert resolve_target_language("system", hass=MockHass()) == "German"
+
+    MockHass.config.language = "fr-CA"
+    assert resolve_target_language("system", hass=MockHass()) == "French"
+
+    MockHass.config.language = "ja"  # unmapped code
+    assert resolve_target_language("system", hass=MockHass()) == "English"
+
+
+def test_assemble_report_prompt_language_directive() -> None:
+    """Test that assemble_report_prompt injects language requirement into Block 5."""
+    # Test German
+    prompt_de = assemble_report_prompt(
+        current_metrics=None,
+        history=None,
+        language="de",
+    )
+    assert "6. LANGUAGE REQUIREMENT: You MUST generate the entire response (including the <summary>...</summary> text and all markdown sections) strictly in German." in prompt_de
+
+    # Test French
+    prompt_fr = assemble_report_prompt(
+        current_metrics=None,
+        history=None,
+        language="fr",
+    )
+    assert "strictly in French" in prompt_fr
+
+    # Test system language resolution via hass
+    class MockConfig:
+        language = "de_DE"
+
+    class MockHass:
+        config = MockConfig()
+
+    prompt_sys = assemble_report_prompt(
+        current_metrics=None,
+        history=None,
+        language="system",
+        hass=MockHass(),
+    )
+    assert "strictly in German" in prompt_sys
+
+    # Test default / English
+    prompt_default = assemble_report_prompt(
+        current_metrics=None,
+        history=None,
+    )
+    assert "strictly in English" in prompt_default
+
+
+def test_assemble_qa_prompt_language_directive() -> None:
+    """Test that assemble_qa_prompt injects language requirement into response instructions."""
+    # Test Spanish
+    qa_es = assemble_qa_prompt(
+        question="How was my sleep?",
+        history=None,
+        language="es",
+    )
+    assert "4. LANGUAGE REQUIREMENT: You MUST answer strictly in Spanish, regardless of the language used in the question." in qa_es
+
+    # Test system language resolution via hass
+    class MockConfig:
+        language = "it"
+
+    class MockHass:
+        config = MockConfig()
+
+    qa_sys = assemble_qa_prompt(
+        question="What is my resting heart rate?",
+        history=None,
+        language="system",
+        hass=MockHass(),
+    )
+    assert "strictly in Italian" in qa_sys
+
+    # Test default
+    qa_default = assemble_qa_prompt(
+        question="How was my sleep?",
+        history=None,
+    )
+    assert "strictly in English" in qa_default
+
+
+def test_parse_ai_health_report_multilingual() -> None:
+    """Test parsing AI health report with foreign language summary."""
+    raw = (
+        "<summary>Hervorragende Erholung heute mit optimalem Ruhepuls von 52 bpm!</summary>\n\n"
+        "## Summary & Recovery Status\n"
+        "Der heutige Tag verlief ideal..."
+    )
+    report = parse_ai_health_report(raw_text=raw, provider_used="gemini", model_used="test")
+    assert report.short_summary == "Hervorragende Erholung heute mit optimalem Ruhepuls von 52 bpm!"
+    assert "Hervorragende Erholung" in report.full_report
+
 
 
 

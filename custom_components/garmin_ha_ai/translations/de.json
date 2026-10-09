@@ -55,7 +55,8 @@
           "ai_provider": "AI Provider",
           "ai_api_key": "AI API-Schlüssel",
           "ai_model": "AI Modell",
-          "ai_base_url": "AI Basis-URL (für OpenAI-kompatible/lokale Endpunkte)"
+          "ai_base_url": "AI Basis-URL (für OpenAI-kompatible/lokale Endpunkte)",
+          "ai_language": "Sprache für AI-Antworten"
         }
       }
     }
