@@ -177,7 +177,7 @@ async def test_e2e_multi_account_concurrent_lifecycle(hass: HomeAssistant) -> No
     with patch("custom_components.garmin_ha_ai.storage.Store", side_effect=create_mock_store):
         with patch(
             "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_fetch_daily_metrics",
-            side_effect=[alice_metrics, bob_metrics],
+            side_effect=[alice_metrics, alice_metrics, bob_metrics, bob_metrics],
         ):
             alice_setup = await async_setup_entry(hass, entry_alice)
             bob_setup = await async_setup_entry(hass, entry_bob)

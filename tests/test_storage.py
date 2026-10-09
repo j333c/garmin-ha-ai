@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 import sys
 from unittest.mock import AsyncMock, MagicMock
 
@@ -154,9 +155,13 @@ def test_prune_history(mock_hass: MagicMock) -> None:
 
     async def run() -> None:
         storage = GarminStorage(mock_hass)
+        today = datetime.now().date()
+        recent_date = (today - timedelta(days=2)).isoformat()
+        old_date = (today - timedelta(days=60)).isoformat()
+
         history_data = {
-            "2020-01-01": {"steps": 5000},
-            "2026-08-15": {"steps": 12000},
+            old_date: {"steps": 5000},
+            recent_date: {"steps": 12000},
         }
 
         async def mock_save(data: dict) -> None:
@@ -170,8 +175,8 @@ def test_prune_history(mock_hass: MagicMock) -> None:
         storage._history_store.async_load = AsyncMock(side_effect=mock_load)
 
         await storage.async_prune_history(retention_days=30)
-        assert "2020-01-01" not in history_data
-        assert "2026-08-15" in history_data
+        assert old_date not in history_data
+        assert recent_date in history_data
 
     asyncio.run(run())
 
@@ -234,9 +239,14 @@ def test_save_and_prune_history_atomic(mock_hass: MagicMock) -> None:
 
     async def run() -> None:
         storage = GarminStorage(mock_hass)
+        today = datetime.now().date()
+        recent_date = (today - timedelta(days=2)).isoformat()
+        old_date = (today - timedelta(days=60)).isoformat()
+        today_date = today.isoformat()
+
         history_data = {
-            "2020-01-01": {"date": "2020-01-01", "steps": 3000},
-            "2026-08-15": {"date": "2026-08-15", "steps": 10000},
+            old_date: {"date": old_date, "steps": 3000},
+            recent_date: {"date": recent_date, "steps": 10000},
         }
 
         async def mock_save(data: dict) -> None:
@@ -249,17 +259,17 @@ def test_save_and_prune_history_atomic(mock_hass: MagicMock) -> None:
         storage._history_store.async_save = AsyncMock(side_effect=mock_save)
         storage._history_store.async_load = AsyncMock(side_effect=mock_load)
 
-        new_snapshot = {"date": "2026-08-16", "steps": 12500}
+        new_snapshot = {"date": today_date, "steps": 12500}
         await storage.async_save_and_prune_history(new_snapshot, retention_days=30)
 
         # Single save call performed
         storage._history_store.async_save.assert_called_once()
         # Old entry pruned
-        assert "2020-01-01" not in history_data
+        assert old_date not in history_data
         # Existing recent entry retained
-        assert "2026-08-15" in history_data
+        assert recent_date in history_data
         # New entry saved
-        assert history_data["2026-08-16"] == new_snapshot
+        assert history_data[today_date] == new_snapshot
 
     asyncio.run(run())
 

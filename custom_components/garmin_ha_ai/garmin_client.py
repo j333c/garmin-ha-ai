@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 try:
@@ -60,6 +60,84 @@ def _parse_weight(weight_raw: Any) -> float | None:
         return round(val / 1000.0, 2) if val > 200 else round(val, 2)
     except (ValueError, TypeError):
         return None
+
+
+def _parse_body_composition(body_data: dict[str, Any] | None) -> float | None:
+    """Extract weight in kg from Garmin body composition payload.
+
+    Checks totalAverage -> weight, dateWeightList -> weight, or direct weight field.
+    """
+    if not body_data or not isinstance(body_data, dict):
+        return None
+    try:
+        # 1. Check totalAverage summary dict
+        total_avg = body_data.get("totalAverage")
+        if isinstance(total_avg, dict):
+            w = _parse_weight(total_avg.get("weight"))
+            if w is not None:
+                return w
+
+        # 2. Check dateWeightList entries
+        weight_list = body_data.get("dateWeightList")
+        if isinstance(weight_list, list) and weight_list:
+            for item in weight_list:
+                if isinstance(item, dict):
+                    w = _parse_weight(item.get("weight"))
+                    if w is not None:
+                        return w
+
+        # 3. Direct weight field
+        if body_data.get("weight") is not None:
+            return _parse_weight(body_data.get("weight"))
+    except Exception:
+        pass
+    return None
+
+
+def _parse_body_battery(
+    battery_data: list[dict[str, Any]] | dict[str, Any] | None,
+) -> tuple[int | None, int | None]:
+    """Extract minimum and maximum body battery values from Garmin body battery payload.
+
+    Navigates bodyBatteryValuesArray tuples/lists [timestamp, value] or charged/drained figures.
+    """
+    if not battery_data:
+        return None, None
+
+    items: list[dict[str, Any]] = []
+    if isinstance(battery_data, list):
+        items = [i for i in battery_data if isinstance(i, dict)]
+    elif isinstance(battery_data, dict):
+        items = [battery_data]
+
+    values: list[int] = []
+    for item in items:
+        # Check explicit bodyBatteryMinValue / bodyBatteryMaxValue
+        if item.get("bodyBatteryMinValue") is not None:
+            try:
+                values.append(int(item["bodyBatteryMinValue"]))
+            except (ValueError, TypeError):
+                pass
+        if item.get("bodyBatteryMaxValue") is not None:
+            try:
+                values.append(int(item["bodyBatteryMaxValue"]))
+            except (ValueError, TypeError):
+                pass
+
+        # Check bodyBatteryValuesArray: [[ts, val], ...]
+        arr = item.get("bodyBatteryValuesArray")
+        if isinstance(arr, list):
+            for entry in arr:
+                if isinstance(entry, (list, tuple)) and len(entry) >= 2 and entry[1] is not None:
+                    try:
+                        values.append(int(entry[1]))
+                    except (ValueError, TypeError):
+                        pass
+
+    if not values:
+        return None, None
+
+    return min(values), max(values)
 
 
 def _parse_sleep_data(sleep_data: dict[str, Any] | None) -> int | None:
@@ -416,9 +494,11 @@ class GarminClient:
         return self.client
 
     async def async_fetch_daily_metrics(
-        self, target_date: date | str | None = None
+        self,
+        target_date: date | str | None = None,
+        fallback_weight: float | None = None,
     ) -> GarminDailyMetrics:
-        """Fetch and normalize daily health statistics for a target date."""
+        """Fetch and normalize daily health statistics for a target date with fallbacks."""
         if isinstance(target_date, date):
             date_str = target_date.isoformat()
         elif isinstance(target_date, str):
@@ -451,6 +531,19 @@ class GarminClient:
             except Exception as err:
                 LOGGER.debug("Could not fetch sleep data for %s: %s", date_str, err)
 
+            # 2b. Sleep score fallback: if today's sleep score is None, check previous day (night session start date)
+            if sleep_score is None:
+                try:
+                    prev_date_str = (date.fromisoformat(date_str) - timedelta(days=1)).isoformat()
+                    prev_sleep_raw = client.get_sleep_data(prev_date_str) or {}
+                    sleep_score = _parse_sleep_data(prev_sleep_raw)
+                    if sleep_score is not None:
+                        LOGGER.debug("Resolved sleep score %s using previous date %s", sleep_score, prev_date_str)
+                except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
+                    raise
+                except Exception as err:
+                    LOGGER.debug("Could not fetch previous day sleep data for %s: %s", date_str, err)
+
             # 3. Fetch HRV data
             hrv_status: str | None = None
             try:
@@ -461,10 +554,11 @@ class GarminClient:
             except Exception as err:
                 LOGGER.debug("Could not fetch HRV data for %s: %s", date_str, err)
 
-            # 4. Fetch activities
+            # 4. Fetch activities across 24-hour window (yesterday to today)
             activities: list[dict[str, Any]] = []
             try:
-                raw_activities = client.get_activities_by_date(date_str, date_str) or []
+                prev_date_str = (date.fromisoformat(date_str) - timedelta(days=1)).isoformat()
+                raw_activities = client.get_activities_by_date(prev_date_str, date_str) or []
                 activities = _parse_activities(raw_activities)
             except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
                 raise
@@ -473,6 +567,39 @@ class GarminClient:
 
             # 5. Extract core metrics
             summary_metrics = _parse_user_summary(summary_data)
+            body_battery_min = summary_metrics.get("body_battery_min")
+            body_battery_max = summary_metrics.get("body_battery_max")
+
+            # 5b. Body Battery fallback: query dedicated get_body_battery if user summary lacks figures
+            if body_battery_min is None or body_battery_max is None:
+                try:
+                    bb_raw = client.get_body_battery(date_str)
+                    bb_min, bb_max = _parse_body_battery(bb_raw)
+                    if body_battery_min is None:
+                        body_battery_min = bb_min
+                    if body_battery_max is None:
+                        body_battery_max = bb_max
+                except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
+                    raise
+                except Exception as err:
+                    LOGGER.debug("Could not fetch body battery endpoint for %s: %s", date_str, err)
+
+            # 5c. Weight extraction: check user summary, then body composition endpoint, then fallback history
+            weight_kg = summary_metrics.get("weight_kg")
+            if weight_kg is None:
+                try:
+                    bc_raw = client.get_body_composition(date_str)
+                    weight_kg = _parse_body_composition(bc_raw)
+                except (GarminConnectAuthenticationError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
+                    raise
+                except Exception as err:
+                    LOGGER.debug("Could not fetch body composition for %s: %s", date_str, err)
+
+            if weight_kg is None and fallback_weight is not None:
+                try:
+                    weight_kg = round(float(fallback_weight), 2)
+                except (ValueError, TypeError):
+                    pass
 
             # 6. Assemble normalized GarminDailyMetrics dataclass
             return GarminDailyMetrics(
@@ -484,9 +611,9 @@ class GarminClient:
                 avg_stress=summary_metrics.get("avg_stress"),
                 sleep_score=sleep_score,
                 hrv_status=hrv_status,
-                body_battery_min=summary_metrics.get("body_battery_min"),
-                body_battery_max=summary_metrics.get("body_battery_max"),
-                weight_kg=summary_metrics.get("weight_kg"),
+                body_battery_min=body_battery_min,
+                body_battery_max=body_battery_max,
+                weight_kg=weight_kg,
                 activities=activities,
             )
 
@@ -495,5 +622,24 @@ class GarminClient:
         except GarminConnectAuthenticationError as err:
             LOGGER.warning("Garmin Connect authentication failed during metric fetch: %s", err)
             raise ConfigEntryAuthFailed("Garmin OAuth session expired") from err
+
+    async def async_upload_workout(
+        self, workout_json: dict[str, Any] | str
+    ) -> dict[str, Any]:
+        """Upload structured workout JSON payload to Garmin Connect workout service."""
+        client = await self.async_get_client()
+
+        def _upload_sync() -> dict[str, Any]:
+            if hasattr(client, "upload_workout") and callable(client.upload_workout):
+                return client.upload_workout(workout_json)
+            # Fallback direct endpoint call if upload_workout is missing on client instance
+            url = f"{getattr(client, 'garmin_workouts', 'https://connect.garmin.com/workout-service')}/workout"
+            if isinstance(workout_json, str):
+                payload = json.loads(workout_json)
+            else:
+                payload = workout_json
+            return client.client.post("connectapi", url, json=payload, api=True)
+
+        return await self.hass.async_add_executor_job(_upload_sync)
 
 

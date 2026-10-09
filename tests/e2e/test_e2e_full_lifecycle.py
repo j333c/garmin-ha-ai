@@ -182,7 +182,8 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
         storage = entry_store["storage"]
 
         assert coordinator.data == mock_metrics
-        mock_save_history.assert_called_once_with(mock_metrics.to_dict(), 30)
+        assert mock_save_history.call_count == 2
+        mock_save_history.assert_called_with(mock_metrics.to_dict(), 30)
 
         # Verify 12 sensor entities + 2 button entities + 1 text + 1 select = 16 total
         assert len(registered_entities) == 16

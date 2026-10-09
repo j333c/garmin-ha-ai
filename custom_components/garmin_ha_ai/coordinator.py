@@ -383,16 +383,66 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
     async def _async_update_data(self) -> GarminDailyMetrics:
         """Fetch daily health and fitness data from Garmin Connect.
 
-        Called automatically by Home Assistant on scheduled interval.
-        Saves snapshot to rolling history, prunes old entries, and kicks off AI report generation.
+        Executes a 24-hour multi-day sliding window reconciliation:
+        1. Inspects local history for latest recorded weight.
+        2. Polls yesterday's finalized metrics and reconciles into local history.
+        3. Polls today's metrics (with historical weight fallback if unweighed).
+        4. Saves today's snapshot, updates coordinator data, and generates AI report.
         """
         try:
-            # 1. Fetch metrics from Garmin Connect Cloud
-            metrics = await self.client.async_fetch_daily_metrics()
+            today_date = dt_util.now().date()
+            yesterday_date = today_date - timedelta(days=1)
+            today_str = today_date.isoformat()
+            yesterday_str = yesterday_date.isoformat()
 
-            # 2. Persist metrics snapshot and prune old entries atomically (single disk write)
             options = {**self.entry.data, **self.entry.options}
             retention_days = int(options.get(CONF_RETENTION_DAYS, DEFAULT_RETENTION_DAYS))
+
+            # 1. Inspect local history to find most recently recorded weight
+            latest_cached_weight: float | None = None
+            try:
+                history = await self.storage.async_load_history()
+                if isinstance(history, dict) and history:
+                    for d in sorted(history.keys(), reverse=True):
+                        w = history[d].get("weight_kg")
+                        if w is not None:
+                            try:
+                                latest_cached_weight = float(w)
+                                break
+                            except (ValueError, TypeError):
+                                pass
+            except Exception as err:
+                LOGGER.debug("Could not inspect cached history for weight: %s", err)
+
+            # 2. Reconcile yesterday's metrics to capture finalized workouts and sleep
+            try:
+                yesterday_metrics = await self.client.async_fetch_daily_metrics(
+                    target_date=yesterday_str,
+                    fallback_weight=latest_cached_weight,
+                )
+                await self.storage.async_save_and_prune_history(
+                    yesterday_metrics.to_dict(), retention_days
+                )
+                if yesterday_metrics.weight_kg is not None:
+                    latest_cached_weight = yesterday_metrics.weight_kg
+                LOGGER.debug(
+                    "Reconciled yesterday's Garmin metrics (%s): %s steps, %s activities",
+                    yesterday_str,
+                    yesterday_metrics.steps,
+                    len(yesterday_metrics.activities) if yesterday_metrics.activities else 0,
+                )
+            except (ConfigEntryAuthFailed, GarminConnectAuthenticationError):
+                raise
+            except Exception as err:
+                LOGGER.debug("Could not reconcile yesterday's metrics (%s): %s", yesterday_str, err)
+
+            # 3. Fetch today's metrics from Garmin Connect Cloud
+            metrics = await self.client.async_fetch_daily_metrics(
+                target_date=today_str,
+                fallback_weight=latest_cached_weight,
+            )
+
+            # 4. Persist today's metrics snapshot and prune old entries atomically
             await self.storage.async_save_and_prune_history(metrics.to_dict(), retention_days)
 
             LOGGER.debug(
@@ -402,7 +452,7 @@ class GarminDataUpdateCoordinator(DataUpdateCoordinator[GarminDailyMetrics]):
             )
             self.last_update_time = dt_util.now()
 
-            # 4. Trigger background AI report generation automatically after sync
+            # 5. Trigger background AI report generation automatically after sync
             self.hass.async_create_task(self.async_generate_report())
             return metrics
         except (ConfigEntryAuthFailed, GarminConnectAuthenticationError) as err:

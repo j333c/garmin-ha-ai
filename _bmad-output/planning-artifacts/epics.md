@@ -41,6 +41,13 @@ This document provides the complete epic and story breakdown for garmin-ha-ai, d
 - FR-16: UI Config Flow Setup & MFA Timeout Recovery — System MUST provide UI Config Flow (`config_flow.py`) for initial setup: Garmin Credentials (email, password, MFA code), AI Provider Selection (Gemini vs Custom OpenAI), API Key, and Initial Goals. If MFA times out or fails, explicit retry/resend options MUST be provided.
 - FR-17: UI Options Flow Updates — System MUST provide UI Options Flow (`options_flow.py`) to allow updating goals, AI focus directives, sync schedules, retention window, and notification targets post-installation without re-entering credentials.
 - FR-18: Custom Component Package & Manifest — System MUST package all code under `custom_components/garmin_ha_ai/` with valid `manifest.json` (`domain: garmin_ha_ai`, version, dependencies `garminconnect>=0.3.10`, `google-genai>=1.0.0`, `httpx>=0.27.0`).
+- FR-19: 24-Hour / Multi-Day Sliding Window Data Fetching — System MUST fetch both yesterday (`date - 1`) and today (`date`) during morning and scheduled polling cycles, ensuring yesterday's final activities and metrics are finalized into local history while capturing today's morning readiness.
+- FR-20: Reliable Weight & Body Composition Extraction — System MUST extract user weight from `get_user_summary()` with fallback to `get_body_composition()` and most recently cached weight in local history, preventing `None`/unavailable sensor states when the user has not weighed in on the current calendar day.
+- FR-21: Resilient Sleep & Body Battery Extraction Fallbacks — System MUST support fallback resolution for sleep score (checking both current and previous night's sleep record) and body battery (querying `get_body_battery()` if user summary lacks body battery min/max values).
+- FR-22: Configurable AI Response Language Preference — System MUST provide a language selection option (`en`, `de`, `fr`, `es`, `it`, `nl`, `system`) in Options Flow and inject strict multilingual directives into the AI prompt assembler and system prompt.
+- FR-23: Dashboard Usability & Metric Visibility Overhaul — Frontend cards MUST render a Weight metric pill/tile, display subtle pending indicators (`⏳ Syncing...`) for unfinalized morning metrics instead of broken `--`, and optimize thumb-zone touch navigation for mobile devices.
+- FR-24: Structured Garmin Workout Serializer & Client Adapter — System MUST provide a Garmin workout schema generator converting workout directives and interval structures into Garmin's structured JSON schema and uploading them to Garmin Connect via `upload_workout()`.
+- FR-25: AI-Driven Workout Creation Service (`garmin_ha_ai.create_workout`) — System MUST expose service `garmin_ha_ai.create_workout` allowing automated or on-demand generation of workouts based on current recovery readiness, sending them to Garmin Connect for physical watch/device synchronization.
 
 ### NonFunctional Requirements
 
@@ -93,6 +100,13 @@ This document provides the complete epic and story breakdown for garmin-ha-ai, d
 - FR-16: Epic 1 - UI Config Flow setup wizard (`config_flow.py`) with 120s MFA callback countdown.
 - FR-17: Epic 3 - UI Options Flow settings update (`options_flow.py`) for goals, directives, and retention.
 - FR-18: Epic 1 - HACS Custom Component packaging & manifest (`custom_components/garmin_ha_ai/manifest.json`).
+- FR-19: Epic 9 - 24-Hour Sliding Window Data Fetching & Morning Ingestion Reconciliation.
+- FR-20: Epic 9 - Reliable Weight Ingestion via Body Composition & Historical Fallback.
+- FR-21: Epic 9 - Resilient Sleep Score & Body Battery Extraction Fallbacks.
+- FR-22: Epic 10 - AI Response Language Preference in Options Flow & Prompt Assembler.
+- FR-23: Epic 10 - Dashboard Usability Overhaul — Weight Display, Resilient Gauges & Responsive Layout.
+- FR-24: Epic 11 - Structured Garmin Workout Serializer & Client Adapter.
+- FR-25: Epic 11 - AI-Driven Workout Creation Service & Device Dispatch.
 
 ## Epic List
 
@@ -127,6 +141,18 @@ Multiple household members can configure independent Garmin Connect accounts, di
 ### Epic 8: Packaged Custom Lovelace Dashboard Card
 User can easily install and configure a dedicated, rich Lovelace dashboard card featuring animated recovery/sleep/body battery gauges, daily coaching previews, and an integrated interactive Q&A chat drawer.
 **FRs covered:** FR-10, FR-14, UX-DR-1, UX-DR-2, UX-DR-3, UX-DR-4, UX-DR-5
+
+### Epic 9: Metric Ingestion Robustness, 24-Hour Scope & Bug Fixes
+User receives complete, accurate, and resilient Garmin biometric sync regardless of polling time. Fixes storage retention test fixtures, introduces a 24-hour multi-day sliding sync window to capture yesterday's finalized workouts and last night's sleep, extracts weight reliably with body composition and history fallbacks, and implements dedicated fallbacks for sleep score and body battery.
+**FRs covered:** FR-2, FR-4, FR-9, FR-19, FR-20, FR-21
+
+### Epic 10: Multilingual AI Coaching & Dashboard Usability Revamp
+User can set their preferred coaching language in Options Flow (English, German, French, Spanish, Italian, Dutch, or System), receiving all briefings, summaries, and Q&A responses in their chosen language. Lovelace cards are revamped for superior mobile and desktop usability, featuring a Weight metric display, graceful pending sync indicators, and high-contrast ergonomic layout.
+**FRs covered:** FR-10, FR-14, FR-17, FR-22, FR-23, UX-DR-1, UX-DR-2, UX-DR-3
+
+### Epic 11: AI-Powered Workout Generator & Garmin Device Sync
+User can generate structured workouts calibrated to their recovery readiness, training goals, and historical strain via AI Coach, serializing them into Garmin Connect's native workout format and uploading them directly to Garmin Connect so they sync seamlessly to physical Garmin watches and cycling computers for guided execution.
+**FRs covered:** FR-7, FR-13, FR-24, FR-25
 
 
 ## Epic 1: Integration Setup, Garmin Auth & Health Metric Ingestion Foundation
@@ -545,6 +571,133 @@ So that I can view my fitness status and converse with my AI Health Coach direct
   2. Expandable coaching briefing with toggle between concise overview and full Markdown report
   3. Interactive Q&A conversational drawer with message history and input form triggering `garmin_ha_ai.ask_question`
 **And** card visual elements adapt seamlessly to Home Assistant light/dark themes using standard HA CSS variables.
+
+---
+
+## Epic 9: Metric Ingestion Robustness, 24-Hour Scope & Bug Fixes
+
+User receives complete, accurate, and resilient Garmin biometric sync regardless of polling time. Fixes storage retention test fixtures, introduces a 24-hour multi-day sliding sync window to capture yesterday's finalized workouts and last night's sleep, extracts weight reliably with body composition and history fallbacks, and implements dedicated fallbacks for sleep score and body battery.
+
+### Story 9.1: Fix Time-Dependent Storage Test Fixtures (`tests/test_storage.py`)
+
+As a developer and system maintainer,
+I want the test fixtures in `test_storage.py` to use dynamic dates relative to `date.today()` rather than hardcoded historical dates,
+So that `pytest` suite passes cleanly across all execution environments regardless of calendar date and retention pruning windows.
+
+**Acceptance Criteria:**
+
+**Given** the test cases `test_prune_history` and `test_save_and_prune_history_atomic` in `tests/test_storage.py`
+**When** the test runs on any calendar date
+**Then** test fixture dates are dynamically computed relative to `date.today()` (e.g. `today - 5 days` for retained entries, `today - 60 days` for pruned entries)
+**And** 100% of tests in `tests/test_storage.py` pass cleanly.
+
+### Story 9.2: 24-Hour Multi-Day Sliding Window Metric Ingestion (`coordinator.py`, `garmin_client.py`)
+
+As a Garmin user checking Home Assistant in the morning,
+I want the coordinator polling engine to ingest a 24-hour / multi-day sliding window (both yesterday and today),
+So that yesterday's completed workouts and final stats are reconciled in local history while today's morning readiness is captured without missing recent training data.
+
+**Acceptance Criteria:**
+
+**Given** a configured `GarminDataUpdateCoordinator` running morning or scheduled updates
+**When** polling Garmin Connect
+**Then** the coordinator fetches yesterday (`date - 1`) and today (`date`), updating yesterday's finalized record into `.storage/` before setting today's metrics
+**And** prompt assembler has access to yesterday's finalized workout strain and daytime calorie burn.
+
+### Story 9.3: Reliable Weight Extraction via Body Composition & History Fallback (`garmin_client.py`, `sensor.py`)
+
+As a user with a smart scale or periodic weight tracking,
+I want `sensor.garmin_weight` to populate from Garmin Connect's body composition endpoint or fallback to the most recent historical weight entry,
+So that the weight sensor is visible and valid even if I did not log a weigh-in on the current day.
+
+**Acceptance Criteria:**
+
+**Given** an authenticated Garmin Connect session
+**When** fetching daily metrics for a day without a new user summary weight record
+**Then** `garmin_client.py` queries `get_body_composition()` or falls back to the most recent cached weight in local history
+**And** `sensor.garmin_weight` displays the valid weight value in kilograms rather than `None`/unavailable.
+
+### Story 9.4: Resilient Sleep Score & Body Battery Extraction Fallbacks (`garmin_client.py`)
+
+As a user waking up early before Garmin sleep processing or body battery summary has finalized,
+I want `garmin_client.py` to inspect previous night sleep DTOs and dedicated body battery endpoints,
+So that `sensor.garmin_sleep_score` and `sensor.garmin_body_battery` consistently show accurate values without blank states.
+
+**Acceptance Criteria:**
+
+**Given** morning metric polling where today's `get_user_summary()` lacks body battery min/max or `get_sleep_data(today)` has not finalized
+**When** `garmin_client.py` normalizes metrics
+**Then** sleep score checks both today and yesterday night's sleep record
+**And** body battery falls back to `get_body_battery(today)` or latest body battery reading
+**And** sensor entities and dashboard gauges reflect the accurate scores.
+
+---
+
+## Epic 10: Multilingual AI Coaching & Dashboard Usability Revamp
+
+User can set their preferred coaching language in Options Flow (English, German, French, Spanish, Italian, Dutch, or System), receiving all briefings, summaries, and Q&A responses in their chosen language. Lovelace cards are revamped for superior mobile and desktop usability, featuring a Weight metric display, graceful pending sync indicators, and high-contrast ergonomic layout.
+
+### Story 10.1: AI Response Language Preference in Options Flow & Prompt Assembler (`options_flow.py`, `prompt.py`, `const.py`)
+
+As an international Home Assistant user,
+I want to select my preferred AI coaching language in the integration's Options Flow,
+So that daily health briefings, executive summaries, and interactive Q&A answers are generated in my native language.
+
+**Acceptance Criteria:**
+
+**Given** a configured integration entry's Options Flow
+**When** the user opens the Options Flow dialog
+**Then** a language selector field (`CONF_AI_LANGUAGE`) presents options (`English`, `German`, `French`, `Spanish`, `Italian`, `Dutch`, `System`)
+**And** `prompt.py` injects a strict language directive into Block 5 formatting rules and system prompt
+**And** generated `<summary>` and full markdown reports conform to the chosen language.
+
+### Story 10.2: Dashboard Usability Overhaul — Weight Display, Resilient Gauges & Responsive Layout (`frontend/garmin-ha-ai-cards.js`)
+
+As a Home Assistant user viewing Garmin cards on mobile or desktop,
+I want an improved dashboard layout featuring a Weight display, graceful pending indicators, and thumb-friendly touch navigation,
+So that my dashboard is immediately glanceable and intuitive on any screen size.
+
+**Acceptance Criteria:**
+
+**Given** `garmin-ha-ai-cards.js` loaded in Home Assistant Lovelace
+**When** viewing `custom:garmin-ha-ai-card` or `custom:garmin-ha-ai-overview-card`
+**Then** a Weight metric pill/tile displays the current weight with unit `kg`
+**And** metrics pending morning sync display a subtle `⏳ Syncing...` state rather than broken `--`
+**And** button targets meet a minimum 44x44px touch threshold with mobile-optimized thumb navigation.
+
+---
+
+## Epic 11: AI-Powered Workout Generator & Garmin Device Sync
+
+User can generate structured workouts calibrated to their recovery readiness, training goals, and historical strain via AI Coach, serializing them into Garmin Connect's native workout format and uploading them directly to Garmin Connect so they sync seamlessly to physical Garmin watches and cycling computers for guided execution.
+
+### Story 11.1: Structured Garmin Workout Serializer & Client Adapter (`workout.py`, `garmin_client.py`)
+
+As a runner or cyclist with a Garmin device,
+I want an adapter that constructs valid Garmin Workout JSON payloads and uploads them via `upload_workout()`,
+So that structured multi-step interval workouts can be pushed programmatically to Garmin Connect.
+
+**Acceptance Criteria:**
+
+**Given** structured workout parameters (sport type, workout steps, target HR zones/pace, durations/distances)
+**When** `GarminClient.async_upload_workout()` is invoked
+**Then** the workout is converted to valid Garmin Workout JSON and submitted to Garmin Connect's workout service
+**And** returns the created `workoutId`.
+
+### Story 11.2: AI Coaching Workout Generation Service & Device Dispatch (`services.py`, `services.yaml`, `ai_engine/`)
+
+As a user wanting daily workout guidance tailored to my recovery,
+I want a service `garmin_ha_ai.create_workout` that leverages the AI Coach to design a workout based on today's readiness and push it to my Garmin watch,
+So that I can wake up and immediately have today's optimal training session ready on my wrist.
+
+**Acceptance Criteria:**
+
+**Given** registered service `garmin_ha_ai.create_workout` with parameters (`sport_type`, `workout_type`, `target_duration_min`, `custom_instructions`, `upload_to_garmin`)
+**When** the service is executed manually or via automation
+**Then** the AI engine evaluates current recovery (HRV, Sleep, Battery) and goals to construct an optimal workout
+**And** if `upload_to_garmin: true`, uploads it to Garmin Connect so it appears under Training > Workouts on the user's Garmin device
+**And** logs success and returns workout metadata via `SupportsResponse.OPTIONAL`.
+
 
 
 

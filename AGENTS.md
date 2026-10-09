@@ -24,7 +24,7 @@ Home Assistant custom component integration for Garmin Connect health data and A
 
 ## Running and verifying
 
-- Run `pytest` to execute all 164 unit, API contract, and E2E lifecycle tests.
+- Run `pytest` to execute all 173 unit, API contract, and E2E lifecycle tests.
 
 ## Conventions that differ from defaults
 

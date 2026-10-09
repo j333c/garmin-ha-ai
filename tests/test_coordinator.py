@@ -43,8 +43,8 @@ async def test_coordinator_update_success(hass: HomeAssistant) -> None:
     metrics = await coordinator._async_update_data()
 
     assert metrics is sample_metrics
-    mock_client.async_fetch_daily_metrics.assert_called()
-    mock_storage.async_save_and_prune_history.assert_called_once_with(sample_metrics.to_dict(), 30)
+    assert mock_client.async_fetch_daily_metrics.call_count == 2
+    assert mock_storage.async_save_and_prune_history.call_count == 2
     hass.async_create_task.assert_called_once()
 
 
@@ -508,6 +508,50 @@ async def test_coordinator_async_generate_report_force_refetches_metrics(hass: H
         mock_client.async_fetch_daily_metrics.assert_called_once()
         # Prompt assembler should receive the fresh metrics (12000 steps)
         assert mock_prompt_assembler.call_args[1]["current_metrics"] == fresh_metrics
+
+
+@pytest.mark.asyncio
+async def test_coordinator_multi_day_window_and_weight_carryover(hass: HomeAssistant) -> None:
+    """Test coordinator passes cached weight as fallback and reconciles yesterday and today."""
+    mock_entry = MagicMock()
+    mock_client = MagicMock()
+    mock_storage = MagicMock()
+
+    # Cached history has a previous weight entry
+    mock_storage.async_load_history = AsyncMock(
+        return_value={"2026-10-07": {"weight_kg": 76.5}}
+    )
+    mock_storage.async_save_and_prune_history = AsyncMock()
+
+    yesterday_metrics = GarminDailyMetrics(date="2026-10-08", steps=9000, weight_kg=None)
+    today_metrics = GarminDailyMetrics(date="2026-10-09", steps=1500, weight_kg=76.5)
+
+    mock_client.async_fetch_daily_metrics = AsyncMock(
+        side_effect=[yesterday_metrics, today_metrics]
+    )
+
+    def _create_task(coro):
+        coro.close()
+        return MagicMock()
+
+    hass.async_create_task = MagicMock(side_effect=_create_task)
+
+    coordinator = GarminDataUpdateCoordinator(
+        hass, mock_entry, mock_client, mock_storage
+    )
+
+    result = await coordinator._async_update_data()
+
+    assert result is today_metrics
+    # Client should be called twice: once for yesterday and once for today
+    assert mock_client.async_fetch_daily_metrics.call_count == 2
+    # Verify fallback_weight was passed
+    calls = mock_client.async_fetch_daily_metrics.call_args_list
+    assert calls[0].kwargs.get("fallback_weight") == 76.5
+    assert calls[1].kwargs.get("fallback_weight") == 76.5
+    # Storage should be updated twice (yesterday + today)
+    assert mock_storage.async_save_and_prune_history.call_count == 2
+
 
 
 

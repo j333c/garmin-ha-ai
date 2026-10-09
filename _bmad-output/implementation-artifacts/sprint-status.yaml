@@ -88,6 +88,19 @@ development_status:
   8-1-packaged-custom-lovelace-card-with-gauges-and-qa-chat-draw: done
   epic-8-retrospective: done
 
+  epic-9: done
+  9-1-fix-time-dependent-storage-test-fixtures: done
+  9-2-24-hour-multi-day-sliding-window-metric-ingestion: done
+  9-3-reliable-weight-extraction-via-body-composition-history: done
+  9-4-resilient-sleep-score-body-battery-extraction-fallbacks: done
+  epic-9-retrospective: done
 
+  epic-10: backlog
+  10-1-ai-response-language-preference-in-options-flow-prompt: backlog
+  10-2-dashboard-usability-overhaul-weight-gauges-layout: backlog
+  epic-10-retrospective: optional
 
-
+  epic-11: backlog
+  11-1-structured-garmin-workout-serializer-client-adapter: backlog
+  11-2-ai-coaching-workout-generation-service-device-dispatch: backlog
+  epic-11-retrospective: optional

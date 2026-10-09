@@ -42,7 +42,12 @@ from garminconnect import (
     GarminConnectConnectionError,
 )
 
-from custom_components.garmin_ha_ai.garmin_client import GarminClient, GarminMfaRequired
+from custom_components.garmin_ha_ai.garmin_client import (
+    GarminClient,
+    GarminMfaRequired,
+    _parse_body_battery,
+    _parse_body_composition,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 
@@ -608,6 +613,179 @@ def test_parse_activities_rich_metrics() -> None:
     assert act["aerobic_training_effect"] == 4.1
     assert act["anaerobic_training_effect"] == 2.3
     assert "zone4" in act["hr_zones"]
+
+
+def test_parse_body_composition() -> None:
+    """Test extracting weight from various body composition payloads."""
+    # totalAverage dict with grams
+    payload1 = {"totalAverage": {"weight": 74500}}
+    assert _parse_body_composition(payload1) == 74.5
+
+    # dateWeightList with grams
+    payload2 = {"dateWeightList": [{"weight": 82000, "calendarDate": "2026-10-09"}]}
+    assert _parse_body_composition(payload2) == 82.0
+
+    # direct weight field in kg
+    payload3 = {"weight": 71.2}
+    assert _parse_body_composition(payload3) == 71.2
+
+    # Empty or None
+    assert _parse_body_composition(None) is None
+    assert _parse_body_composition({}) is None
+
+
+def test_parse_body_battery() -> None:
+    """Test extracting min and max body battery from various payloads."""
+    # bodyBatteryValuesArray array of [timestamp, value]
+    payload1 = [
+        {
+            "date": "2026-10-09",
+            "bodyBatteryValuesArray": [
+                [1700000000, 85],
+                [1700010000, 62],
+                [1700020000, 95],
+                [1700030000, 40],
+            ],
+        }
+    ]
+    b_min, b_max = _parse_body_battery(payload1)
+    assert b_min == 40
+    assert b_max == 95
+
+    # explicit min and max fields
+    payload2 = {"bodyBatteryMinValue": 25, "bodyBatteryMaxValue": 80}
+    b_min2, b_max2 = _parse_body_battery(payload2)
+    assert b_min2 == 25
+    assert b_max2 == 80
+
+    # Empty
+    assert _parse_body_battery(None) == (None, None)
+    assert _parse_body_battery([]) == (None, None)
+
+
+def test_fetch_daily_metrics_sleep_and_body_battery_fallbacks() -> None:
+    """Test sleep score and body battery fallback endpoints when primary summary is sparse."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_gc = MagicMock()
+        # Today user summary lacks body battery and sleep
+        mock_gc.get_user_summary = MagicMock(return_value={
+            "totalSteps": 8000,
+            "totalDistanceMeters": 6000,
+            "restingHeartRate": 52,
+            # No weight, no bodyBatteryMinValue
+        })
+        # Today sleep data is empty (user woke up early)
+        mock_gc.get_sleep_data = MagicMock(side_effect=lambda d: (
+            {} if d == "2026-10-09" else {
+                "dailySleepDTO": {"sleepScores": {"overall": {"value": 85}}}
+            }
+        ))
+        # Dedicated body battery endpoint provides values
+        mock_gc.get_body_battery = MagicMock(return_value=[{
+            "bodyBatteryValuesArray": [[1, 30], [2, 92]]
+        }])
+        # Dedicated body composition endpoint provides weight
+        mock_gc.get_body_composition = MagicMock(return_value={
+            "totalAverage": {"weight": 75200}
+        })
+        mock_gc.get_hrv_data = MagicMock(return_value={"hrvSummary": {"status": "BALANCED"}})
+        mock_gc.get_activities_by_date = MagicMock(return_value=[])
+
+        client_adapter.client = mock_gc
+        client_adapter.async_get_client = AsyncMock(return_value=mock_gc)
+
+        metrics = await client_adapter.async_fetch_daily_metrics(
+            target_date="2026-10-09", fallback_weight=74.0
+        )
+
+        assert metrics.steps == 8000
+        # Sleep score recovered from previous day
+        assert metrics.sleep_score == 85
+        # Body battery recovered from get_body_battery endpoint
+        assert metrics.body_battery_min == 30
+        assert metrics.body_battery_max == 92
+        # Weight recovered from get_body_composition endpoint (75200g -> 75.2kg)
+        assert metrics.weight_kg == 75.2
+
+    asyncio.run(run())
+
+
+def test_fetch_daily_metrics_weight_historical_fallback() -> None:
+    """Test weight falling back to historical weight when both summary and body composition are empty."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_gc = MagicMock()
+        mock_gc.get_user_summary = MagicMock(return_value={
+            "totalSteps": 5000,
+            "totalDistanceMeters": 4000,
+            "restingHeartRate": 50,
+        })
+        mock_gc.get_sleep_data = MagicMock(return_value={})
+        mock_gc.get_body_battery = MagicMock(return_value=[])
+        mock_gc.get_body_composition = MagicMock(return_value={})
+        mock_gc.get_hrv_data = MagicMock(return_value={})
+        mock_gc.get_activities_by_date = MagicMock(return_value=[])
+
+        client_adapter.client = mock_gc
+        client_adapter.async_get_client = AsyncMock(return_value=mock_gc)
+
+        metrics = await client_adapter.async_fetch_daily_metrics(
+            target_date="2026-10-09", fallback_weight=73.5
+        )
+
+        # Weight uses fallback_weight
+        assert metrics.weight_kg == 73.5
+
+    asyncio.run(run())
+
+
+def test_upload_workout_success() -> None:
+    """Test async_upload_workout calls client upload_workout."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        mock_gc = MagicMock()
+        mock_gc.upload_workout = MagicMock(return_value={"workoutId": 998877})
+
+        client_adapter.client = mock_gc
+        client_adapter.async_get_client = AsyncMock(return_value=mock_gc)
+
+        result = await client_adapter.async_upload_workout({"workoutName": "Test Workout"})
+        assert result.get("workoutId") == 998877
+        mock_gc.upload_workout.assert_called_once_with({"workoutName": "Test Workout"})
+
+    asyncio.run(run())
+
 
 
 
