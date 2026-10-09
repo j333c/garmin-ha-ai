@@ -4,7 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.6.5--rc1-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.5--rc2-emerald.svg?style=for-the-badge)](https://github.com/j333c/garmin-ha-ai/releases)
 
 A privacy-first, subscription-free **Home Assistant custom integration** that pulls your daily health and performance metrics from **Garmin Connect** and delivers personalized, context-aware AI coaching briefings and interactive health intelligence.
 
@@ -231,6 +231,7 @@ Click **Configure** on the integration card under **Settings → Devices & Servi
 * **Notification Targets**: Comma-separated notify targets (e.g. `notify.mobile_app_phone, notify.persistent_notification`).
 * **Scheduled Polling Time**: Set daily morning execution time (default: `06:00:00`).
 * **AI Provider & Models**: Switch between Gemini and OpenAI, choose model IDs (`gemini-2.0-flash`, `gpt-4o`, etc.), or specify local Base URLs (`http://localhost:11434/v1` for Ollama).
+* **AI Response Language**: Configure preferred AI language (`system`, English, German, French, Spanish, Italian, Dutch) for morning briefings and interactive Q&A.
 
 ---
 
@@ -269,6 +270,8 @@ Home Assistant will raise a notification and trigger a **Reauth Flow**. Simply c
 ---
 
 ## 💖 Acknowledgements & Built With
+
+Special thanks to [@urbanfrank](https://github.com/urbanfrank) for dedicated testing, feedback, and real-world validation!
 
 This integration is built with and powered by the following open-source frameworks, libraries, and tools:
 

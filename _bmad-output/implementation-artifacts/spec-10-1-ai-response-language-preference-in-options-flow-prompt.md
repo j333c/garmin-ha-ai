@@ -79,6 +79,17 @@ Add an `ai_language` configuration selector in the integration Options Flow supp
 - Given an existing config entry with no `ai_language` configured, when reports or Q&A prompts are generated, then prompt assembly executes without error using the default language.
 - Given foreign language output inside `<summary>`, when `parse_ai_health_report` parses the response, then `short_summary` is properly extracted and clamped within 250 characters.
 
+### Review Findings
+
+- [x] [Review][Patch] Support regional locale normalization and native language name mapping in resolve_target_language [custom_components/garmin_ha_ai/ai_engine/prompt.py:29]
+- [x] [Review][Patch] Add test verification for options flow pre-population of existing configured language [tests/test_options_flow.py:201]
+- [x] [Review][Patch] Add test assertion for foreign-language summary clamping >250 characters [tests/test_prompt.py:364]
+- [x] [Review][Patch] Clarify in Block 5 prompt that markdown section headings should be written in target language [custom_components/garmin_ha_ai/ai_engine/prompt.py:335]
+- [x] [Review][Patch] Type hass parameter with HomeAssistant | None in prompt assembly signatures [custom_components/garmin_ha_ai/ai_engine/prompt.py:29]
+- [x] [Review][Defer] Support language override parameter in services.py and services.yaml [custom_components/garmin_ha_ai/services.py:27] — deferred, pre-existing
+- [x] [Review][Defer] Expose CONF_AI_LANGUAGE in initial setup config flow [custom_components/garmin_ha_ai/config_flow.py:86] — deferred, pre-existing
+- [x] [Review][Defer] Provide complete UI translation files for fr, es, it, nl [custom_components/garmin_ha_ai/translations/] — deferred, pre-existing
+
 ## Design Notes
 
 Language resolution maps ISO-639-1 language codes to human-readable language names suitable for LLM directives:

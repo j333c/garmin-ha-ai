@@ -286,6 +286,20 @@ def test_resolve_target_language() -> None:
     MockHass.config.language = "ja"  # unmapped code
     assert resolve_target_language("system", hass=MockHass()) == "English"
 
+    # Direct regional locale tags without hass
+    assert resolve_target_language("de-DE") == "German"
+    assert resolve_target_language("de_DE") == "German"
+    assert resolve_target_language("fr-CA") == "French"
+
+    # Native language names
+    assert resolve_target_language("deutsch") == "German"
+    assert resolve_target_language("français") == "French"
+    assert resolve_target_language("francais") == "French"
+    assert resolve_target_language("español") == "Spanish"
+    assert resolve_target_language("espanol") == "Spanish"
+    assert resolve_target_language("italiano") == "Italian"
+    assert resolve_target_language("nederlands") == "Dutch"
+
 
 def test_assemble_report_prompt_language_directive() -> None:
     """Test that assemble_report_prompt injects language requirement into Block 5."""
@@ -362,7 +376,7 @@ def test_assemble_qa_prompt_language_directive() -> None:
 
 
 def test_parse_ai_health_report_multilingual() -> None:
-    """Test parsing AI health report with foreign language summary."""
+    """Test parsing AI health report with foreign language summary and clamping."""
     raw = (
         "<summary>Hervorragende Erholung heute mit optimalem Ruhepuls von 52 bpm!</summary>\n\n"
         "## Summary & Recovery Status\n"
@@ -371,6 +385,19 @@ def test_parse_ai_health_report_multilingual() -> None:
     report = parse_ai_health_report(raw_text=raw, provider_used="gemini", model_used="test")
     assert report.short_summary == "Hervorragende Erholung heute mit optimalem Ruhepuls von 52 bpm!"
     assert "Hervorragende Erholung" in report.full_report
+
+    # Test foreign language summary clamping to <= 250 characters
+    long_german_summary = (
+        "Hervorragende Erholung heute mit einem außergewöhnlich niedrigen Ruhepuls von 52 bpm, "
+        "einer tiefen und erholsamen Schlafphase von über 8 Stunden sowie einer vollständigen "
+        "Regeneration der Body Battery auf 100 Punkte vor dem geplanten Ausdauertraining am Nachmittag "
+        "unter optimalen Bedingungen."
+    )
+    assert len(long_german_summary) > 250
+    raw_long = f"<summary>{long_german_summary}</summary>\n\n## Bericht\nDetails hier."
+    report_long = parse_ai_health_report(raw_text=raw_long, provider_used="gemini", model_used="test")
+    assert len(report_long.short_summary) <= 250
+    assert report_long.short_summary.endswith("...")
 
 
 

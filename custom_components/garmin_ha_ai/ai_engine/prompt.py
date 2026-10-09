@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from homeassistant.core import HomeAssistant
+
 from ..analytics import (
     calculate_baseline_analytics,
     format_baseline_analytics_block,
@@ -26,7 +28,20 @@ DEFAULT_COACHING_DIRECTIVES = (
     "Focus on sleep quality, stress management, and appropriate workout intensity."
 )
 
-def resolve_target_language(language: str | None = None, hass: Any = None) -> str:
+NATIVE_LANGUAGE_NAMES: dict[str, str] = {
+    "deutsch": "German",
+    "français": "French",
+    "francais": "French",
+    "español": "Spanish",
+    "espanol": "Spanish",
+    "italiano": "Italian",
+    "nederlands": "Dutch",
+}
+
+
+def resolve_target_language(
+    language: str | None = None, hass: HomeAssistant | None = None
+) -> str:
     """Resolve the human-readable target language for AI responses.
 
     If language is 'system' or None, attempts to detect Home Assistant system language
@@ -45,14 +60,19 @@ def resolve_target_language(language: str | None = None, hass: Any = None) -> st
             return SUPPORTED_LANGUAGE_NAMES.get(base_code, "English")
         return "English"
 
-    # Exact 2-letter ISO code match (e.g., 'de', 'fr')
-    if len(selected) == 2 and selected in SUPPORTED_LANGUAGE_NAMES:
-        return SUPPORTED_LANGUAGE_NAMES[selected]
+    # Normalize regional locale code (e.g. 'de-DE', 'de_DE' -> 'de')
+    base_code = selected.replace("_", "-").split("-")[0]
+    if len(base_code) == 2 and base_code in SUPPORTED_LANGUAGE_NAMES:
+        return SUPPORTED_LANGUAGE_NAMES[base_code]
 
-    # Full language name match (e.g., 'german', 'deutsch')
+    # Full English language name match (e.g., 'german', 'french')
     for code, name in SUPPORTED_LANGUAGE_NAMES.items():
         if selected == name.lower():
             return name
+
+    # Native language name match (e.g., 'deutsch', 'français')
+    if selected in NATIVE_LANGUAGE_NAMES:
+        return NATIVE_LANGUAGE_NAMES[selected]
 
     return "English"
 
@@ -287,7 +307,7 @@ def assemble_report_prompt(
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
     language: str | None = None,
-    hass: Any = None,
+    hass: HomeAssistant | None = None,
 ) -> str:
     """Assemble 5-block prompt payload for daily AI Health Briefing generation.
 
@@ -332,7 +352,7 @@ def assemble_report_prompt(
         "   - The summary text inside <summary> MUST NOT exceed 200 characters.\n"
         "   - Example: <summary>Great recovery today with an 85 sleep score! Focus on light cardio and hydration.</summary>\n"
         "2. Following the <summary> block, provide the complete, detailed Daily Health Briefing in Markdown format.\n"
-        "3. Structure the detailed briefing with clear section headers:\n"
+        f"3. Structure the detailed briefing with clear section headers (translated into {target_lang}):\n"
         "   - ## Summary & Recovery Status\n"
         "   - ## Sleep & Stress Analysis\n"
         "   - ## Activity & Performance\n"
@@ -366,7 +386,7 @@ def assemble_qa_prompt(
     coaching_directives: str | None = None,
     max_history_chars: int = DEFAULT_MAX_HISTORY_CHARS,
     language: str | None = None,
-    hass: Any = None,
+    hass: HomeAssistant | None = None,
 ) -> str:
     """Assemble prompt payload for interactive Q&A session.
 
