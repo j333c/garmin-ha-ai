@@ -1,6 +1,6 @@
 # Garmin HA AI — Home Assistant Integration
 
-[![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/default)
+[![Marketplace / HACS](https://img.shields.io/badge/Marketplace%20%2F%20HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/default)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io/)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -48,7 +48,7 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 
 ## 📖 Quick Links
 
-* [**Installation Guide**](docs/installation.md) — Detailed HACS and manual installation steps.
+* [**Installation Guide**](docs/installation.md) — Detailed Marketplace, HACS, and manual installation steps.
 * [**First Steps & Configuration**](docs/first_steps.md) — Initial setup, AI provider selection, and dashboard setup.
 * [**Lovelace Dashboard Guide**](docs/dashboard_cards.md) — Dashboard cards, interactive Q&A setups, and full YAML examples.
 * [**Interactive Q&A Guide**](docs/lovelace_qa_card.md) — Interactive AI coaching questions and chat drawer setup.
@@ -64,10 +64,19 @@ A privacy-first, subscription-free **Home Assistant custom integration** that pu
 
 ### 1. Installation
 
-#### Via HACS (Recommended)
-1. In Home Assistant, open **HACS** → **Integrations** → **Three dots (⋮)** → **Custom repositories**.
-2. Add `https://github.com/j333c/garmin-ha-ai` as an **Integration**.
-3. Search for **Garmin HA AI**, click **Download**, and restart Home Assistant.
+#### Via Marketplace / HACS (Recommended)
+
+[![Open your Home Assistant instance and open a repository inside the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=j333c&repository=garmin-ha-ai&category=integration)
+
+* **Home Assistant 2026.11+ (Marketplace)**:
+  1. In Home Assistant, open **Settings** → **Marketplace** → **Three dots (⋮)** → **Custom repositories**.
+  2. Add `https://github.com/j333c/garmin-ha-ai` as an **Integration**.
+  3. Search for **Garmin HA AI**, click **Download**, and restart Home Assistant.
+
+* **Home Assistant < 2026.11 (HACS)**:
+  1. In Home Assistant, open **HACS** → **Integrations** → **Three dots (⋮)** → **Custom repositories**.
+  2. Add `https://github.com/j333c/garmin-ha-ai` as an **Integration**.
+  3. Search for **Garmin HA AI**, click **Download**, and restart Home Assistant.
 
 #### Manual Installation
 1. Download or clone this repository.
@@ -280,7 +289,7 @@ This integration is built with and powered by the following open-source framewor
 * **[python-garminconnect](https://github.com/cyberjunky/python-garminconnect)** — Python library for asynchronous and synchronous communication with Garmin Connect.
 * **[Google GenAI SDK](https://github.com/googleapis/python-genai)** (`google-genai`) — The official Python SDK for Google Gemini models.
 * **[HTTPX](https://www.python-httpx.org/)** ([GitHub](https://github.com/encode/httpx)) — High-performance async HTTP client powering OpenAI and OpenAI-compatible API communication.
-* **[HACS](https://hacs.xyz/)** — Home Assistant Community Store.
+* **[Home Assistant Marketplace / HACS](https://hacs.xyz/)** — Built-in community catalog and package ecosystem.
 * **[Voluptuous](https://github.com/alecthomas/voluptuous)** — Data validation library for Home Assistant configuration and option flows.
 * **[pytest](https://docs.pytest.org/)** & **[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)** — Testing framework and Home Assistant test fixtures.
 

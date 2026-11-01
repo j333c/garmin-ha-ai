@@ -19,9 +19,26 @@ Before installing, ensure you have:
 
 ## Installation Methods
 
-### Method 1: Via HACS (Recommended)
+### Method 1: Via Marketplace or HACS (Recommended)
 
-If you use **HACS (Home Assistant Community Store)**:
+[![Open your Home Assistant instance and open a repository inside the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=j333c&repository=garmin-ha-ai&category=integration)
+
+#### For Home Assistant 2026.11+ (Native Marketplace):
+
+1. Open **Home Assistant** and navigate to **Settings** → **Marketplace**.
+2. Click the **three dots (⋮)** in the top right corner and select **Custom repositories**.
+3. In the dialog:
+   * **Repository**: `https://github.com/j333c/garmin-ha-ai`
+   * **Category / Type**: `Integration`
+4. Click **Add**.
+5. Find **Garmin HA AI** in the Marketplace list and click **Download** (or **Install**).
+6. Select the latest release and confirm the download.
+7. **Restart Home Assistant**:
+   * Navigate to **Settings** → **System** → Click the **Power icon** (top right) → **Restart Home Assistant**.
+
+#### For Home Assistant < 2026.11 (Legacy HACS):
+
+If you are using an older version of Home Assistant with **HACS (Home Assistant Community Store)**:
 
 1. Open **Home Assistant** and navigate to **HACS** in the left sidebar.
 2. Click the **three dots (⋮)** in the top right corner and select **Custom repositories**.
@@ -38,7 +55,7 @@ If you use **HACS (Home Assistant Community Store)**:
 
 ### Method 2: Manual Installation
 
-If you do not use HACS or prefer manual installation:
+If you prefer manual installation or do not use Marketplace / HACS:
 
 1. **Download the Release**:
    * Download the latest release `.zip` archive or clone the repository from GitHub:
