@@ -665,6 +665,22 @@ So that my dashboard is immediately glanceable and intuitive on any screen size.
 **And** metrics pending morning sync display a subtle `⏳ Syncing...` state rather than broken `--`
 **And** button targets meet a minimum 44x44px touch threshold with mobile-optimized thumb navigation.
 
+### Story 10.3: Garmin MFA Session Resume & Decoupled Verification Fix (`garmin_client.py`, `config_flow.py`, `manifest.json`)
+
+As a Home Assistant user with Garmin Two-Factor Authentication (MFA) enabled,
+I want to submit the 6-digit verification code received by email or SMS during setup without triggering invalid code errors or repeated login challenges,
+So that my Garmin Connect integration authenticates cleanly and persists OAuth session tokens.
+
+**Acceptance Criteria:**
+
+**Given** a user initiating integration setup or reauth with MFA enabled on their Garmin account
+**When** the user submits email and password in the config flow
+**Then** Garmin client captures the decoupled session state (`client_state`) using `return_on_mfa=True` and raises `GarminMfaRequired` carrying the state
+**And** the UI config flow transitions to `async_step_mfa` and preserves `self._mfa_client_state`
+**When** the user inputs the 6-digit MFA passcode received from Garmin
+**Then** `GarminClient.async_login_with_credentials` resumes the existing session via `resume_login(client_state, mfa_code)` without calling `login()` on a new session or triggering a duplicate MFA code email
+**And** OAuth session tokens are successfully persisted to local storage and the config entry is created.
+
 ---
 
 ## Epic 11: AI-Powered Workout Generator & Garmin Device Sync

@@ -43,6 +43,7 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         super().__init__()
         self._user_data: dict[str, Any] = {}
         self._reauth_entry: config_entries.ConfigEntry | None = None
+        self._mfa_client_state: dict[str, Any] | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -70,9 +71,10 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await client.async_login_with_credentials(username, password)
                 # Successful direct login without MFA challenge
                 return self._create_garmin_entry()
-            except GarminMfaRequired:
+            except GarminMfaRequired as err:
                 # Intercept MFA requirement and prompt user for code
                 LOGGER.info("Garmin MFA required for user: %s", username)
+                self._mfa_client_state = getattr(err, "client_state", None)
                 return await self.async_step_mfa()
             except ConfigEntryAuthFailed:
                 errors["base"] = "invalid_auth"
@@ -129,9 +131,13 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Complete credential login with supplied MFA passcode
             try:
                 await client.async_login_with_credentials(
-                    username, password, mfa_code=mfa_code
+                    username,
+                    password,
+                    mfa_code=mfa_code,
+                    client_state=self._mfa_client_state,
                 )
                 if self._reauth_entry:
+                    self._mfa_client_state = None
                     # If triggered from reauth flow, reload config entry and abort
                     self.hass.async_create_task(
                         self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
@@ -181,11 +187,13 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
                 )
                 return self.async_abort(reason="reauth_successful")
-            except GarminMfaRequired:
+            except GarminMfaRequired as err:
+                LOGGER.info("Garmin MFA required during reauth for user: %s", username)
                 self._user_data = {
                     CONF_GARMIN_USERNAME: username,
                     CONF_GARMIN_PASSWORD: password,
                 }
+                self._mfa_client_state = getattr(err, "client_state", None)
                 return await self.async_step_mfa()
             except (ConfigEntryAuthFailed, GarminConnectAuthenticationError):
                 errors["base"] = "invalid_auth"
@@ -205,6 +213,7 @@ class GarminHaAiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         Tokens are persisted securely in GarminStorage (.storage directory).
         """
+        self._mfa_client_state = None
         username = self._user_data[CONF_GARMIN_USERNAME]
         entry_data = {
             CONF_GARMIN_USERNAME: username,

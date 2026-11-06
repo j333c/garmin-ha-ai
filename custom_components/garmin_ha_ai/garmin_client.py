@@ -401,7 +401,11 @@ class GarminClient:
             raise ConfigEntryAuthFailed("Unexpected error during Garmin token authentication") from err
 
     async def async_login_with_credentials(
-        self, username: str, password: str, mfa_code: str | None = None
+        self,
+        username: str,
+        password: str,
+        mfa_code: str | None = None,
+        client_state: Any = None,
     ) -> dict[str, Any]:
         """Authenticate with Garmin Connect using email/password and optional MFA code.
 
@@ -410,16 +414,24 @@ class GarminClient:
         Raises ConfigEntryAuthFailed on invalid credentials.
         """
         def _credential_login() -> Garmin:
-            client = Garmin(email=username, password=password)
             if mfa_code:
-                # If MFA code provided, pass it directly to login
-                try:
-                    client.login(mfa_code=mfa_code)
-                except TypeError:
-                    client.login()
-                return client
+                if client_state:
+                    client = Garmin()
+                    if hasattr(client, "resume_login") and callable(client.resume_login):
+                        client.resume_login(client_state, mfa_code)
+                        return client
+                    raise ConfigEntryAuthFailed("Garmin client does not support resume_login")
 
-            # Intercept MFA prompt callback from python-garminconnect
+                # If mfa_code is provided without client_state, do not trigger a fresh login
+                raise ConfigEntryAuthFailed("MFA passcode provided without active session state")
+
+            # Step 1: Initial credential login with return_on_mfa=True to capture decoupled state
+            try:
+                client = Garmin(email=username, password=password, return_on_mfa=True)
+            except TypeError:
+                client = Garmin(email=username, password=password)
+
+            # Intercept MFA prompt callback from python-garminconnect if return_on_mfa is bypassed
             def mfa_callback():
                 raise GarminMfaRequired("Garmin MFA required")
 
@@ -439,7 +451,8 @@ class GarminClient:
                 raise
 
             if isinstance(res, tuple) and len(res) > 0 and res[0] == "needs_mfa":
-                raise GarminMfaRequired("Garmin MFA required")
+                captured_state = res[1] if len(res) > 1 else None
+                raise GarminMfaRequired("Garmin MFA required", client_state=captured_state)
 
             return client
 
@@ -448,7 +461,13 @@ class GarminClient:
             self.client = await self.hass.async_add_executor_job(_credential_login)
             LOGGER.info("Successfully authenticated with Garmin Connect")
             return await self._async_save_current_tokens()
-        except (GarminMfaRequired, GarminRateLimitError, GarminConnectTooManyRequestsError, GarminConnectConnectionError):
+        except (
+            ConfigEntryAuthFailed,
+            GarminMfaRequired,
+            GarminRateLimitError,
+            GarminConnectTooManyRequestsError,
+            GarminConnectConnectionError,
+        ):
             raise
         except GarminConnectAuthenticationError as err:
             err_str = str(err).lower()

@@ -84,22 +84,29 @@ async def test_e2e_reauth_lifecycle_on_session_expiration(hass: HomeAssistant) -
 
     with patch(
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_login_with_credentials",
-        side_effect=GarminMfaRequired("MFA challenge"),
+        side_effect=GarminMfaRequired("MFA challenge", client_state={"reauth_session": "token-abc"}),
     ):
         reauth_step1 = await reauth_flow.async_step_reauth_confirm(
             {CONF_GARMIN_PASSWORD: "new-super-secret-password"}
         )
         assert reauth_step1["type"] == "form"
         assert reauth_step1["step_id"] == "mfa"
+        assert reauth_flow._mfa_client_state == {"reauth_session": "token-abc"}
 
     with patch(
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_login_with_credentials",
         new_callable=AsyncMock,
         return_value={"tokenstore": "renewed-token-xyz"},
-    ):
+    ) as mock_reauth_mfa:
         reauth_step2 = await reauth_flow.async_step_mfa({CONF_MFA_CODE: "778899"})
         assert reauth_step2["type"] == "abort"
         assert reauth_step2["reason"] == "reauth_successful"
+        mock_reauth_mfa.assert_called_once_with(
+            "runner@garmin.com",
+            "new-super-secret-password",
+            mfa_code="778899",
+            client_state={"reauth_session": "token-abc"},
+        )
 
 
 @pytest.mark.asyncio

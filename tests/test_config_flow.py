@@ -74,11 +74,14 @@ async def test_user_step_mfa_required(hass: HomeAssistant) -> None:
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
         new_callable=AsyncMock,
     ) as mock_login:
-        mock_login.side_effect = GarminMfaRequired()
+        mock_login.side_effect = GarminMfaRequired(
+            "Garmin MFA required", client_state={"session_cookies": "mock_cookie_val"}
+        )
         result = await flow.async_step_user(user_input=user_input)
 
         assert result["type"] == "form"
         assert result["step_id"] == "mfa"
+        assert flow._mfa_client_state == {"session_cookies": "mock_cookie_val"}
 
 
 @pytest.mark.asyncio
@@ -93,6 +96,7 @@ async def test_mfa_step_success(hass: HomeAssistant) -> None:
         CONF_AI_PROVIDER: PROVIDER_GEMINI,
         CONF_AI_API_KEY: "gemini_api_key_12345",
     }
+    flow._mfa_client_state = {"session_cookies": "mock_cookie_val"}
 
     with patch(
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
@@ -105,7 +109,10 @@ async def test_mfa_step_success(hass: HomeAssistant) -> None:
         assert result["type"] == "create_entry"
         assert result["title"] == "Garmin (mfauser@example.com)"
         mock_login.assert_called_once_with(
-            "mfauser@example.com", "securepassword", mfa_code="654321"
+            "mfauser@example.com",
+            "securepassword",
+            mfa_code="654321",
+            client_state={"session_cookies": "mock_cookie_val"},
         )
 
 
@@ -200,7 +207,9 @@ async def test_reauth_step_with_mfa(hass: HomeAssistant) -> None:
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
         new_callable=AsyncMock,
     ) as mock_login:
-        mock_login.side_effect = GarminMfaRequired()
+        mock_login.side_effect = GarminMfaRequired(
+            "Garmin MFA required", client_state={"reauth_state": "reauth_cookies"}
+        )
 
         result = await flow.async_step_reauth_confirm(
             user_input={CONF_GARMIN_PASSWORD: "new_password"}
@@ -209,6 +218,7 @@ async def test_reauth_step_with_mfa(hass: HomeAssistant) -> None:
         assert result["type"] == "form"
         assert result["step_id"] == "mfa"
         assert flow._user_data[CONF_GARMIN_USERNAME] == "reauth_mfa@example.com"
+        assert flow._mfa_client_state == {"reauth_state": "reauth_cookies"}
 
 
 @pytest.mark.asyncio
@@ -226,6 +236,7 @@ async def test_reauth_step_mfa_submission_success(hass: HomeAssistant) -> None:
         CONF_GARMIN_USERNAME: "reauth_mfa@example.com",
         CONF_GARMIN_PASSWORD: "new_password",
     }
+    flow._mfa_client_state = {"reauth_state": "reauth_cookies"}
 
     with patch(
         "custom_components.garmin_ha_ai.config_flow.GarminClient.async_login_with_credentials",
@@ -238,6 +249,12 @@ async def test_reauth_step_mfa_submission_success(hass: HomeAssistant) -> None:
         assert result["type"] == "abort"
         assert result["reason"] == "reauth_successful"
         hass.async_create_task.assert_called_once()
+        mock_login.assert_called_once_with(
+            "reauth_mfa@example.com",
+            "new_password",
+            mfa_code="654321",
+            client_state={"reauth_state": "reauth_cookies"},
+        )
 
 
 def test_config_flow_domain_and_manifest() -> None:

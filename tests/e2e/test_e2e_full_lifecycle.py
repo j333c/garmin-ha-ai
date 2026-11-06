@@ -59,7 +59,7 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
     # User enters credentials & AI provider config -> Garmin raises MFA Required
     with patch(
         "custom_components.garmin_ha_ai.garmin_client.GarminClient.async_login_with_credentials",
-        side_effect=GarminMfaRequired("MFA code required"),
+        side_effect=GarminMfaRequired("MFA code required", client_state={"e2e_session": "token-xyz"}),
     ):
         user_result = await flow.async_step_user(
             {
@@ -73,6 +73,7 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
 
         assert user_result["type"] == "form"
         assert user_result["step_id"] == "mfa"
+        assert flow._mfa_client_state == {"e2e_session": "token-xyz"}
 
     # User enters MFA code -> successfully authenticated
     with patch(
@@ -85,6 +86,12 @@ async def test_e2e_full_integration_pipeline_lifecycle(hass: HomeAssistant) -> N
 
         assert mfa_result["type"] == "create_entry"
         assert mfa_result["title"] == "Garmin (athlete@example.com)"
+        mock_login_mfa.assert_called_once_with(
+            "athlete@example.com",
+            "secret-garmin-pw",
+            mfa_code="654321",
+            client_state={"e2e_session": "token-xyz"},
+        )
         entry_data = mfa_result["data"]
         # Passwords must never be stored in entry data
         assert CONF_GARMIN_PASSWORD not in entry_data

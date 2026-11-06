@@ -1,6 +1,8 @@
 """Centralized exception taxonomy for Garmin HA AI integration."""
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 
 
@@ -22,6 +24,15 @@ class GarminAuthError(GarminError, ConfigEntryAuthFailed):
 
 class GarminMfaRequired(GarminError):
     """Exception raised when Garmin Connect requires MFA verification passcode."""
+
+    def __init__(
+        self,
+        message: str = "Garmin MFA required",
+        client_state: Any = None,
+    ) -> None:
+        """Initialize GarminMfaRequired with optional decoupled client_state."""
+        super().__init__(message)
+        self.client_state = client_state
 
 
 GarminConnectMfaRequired = GarminMfaRequired

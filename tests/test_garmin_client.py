@@ -135,14 +135,70 @@ def test_login_with_credentials_success() -> None:
             mock_garmin_cls.return_value = mock_garmin_inst
 
             tokens = await client_adapter.async_login_with_credentials(
-                username="testuser@example.com", password="secret_password", mfa_code="123456"
+                username="testuser@example.com",
+                password="secret_password",
+                mfa_code="123456",
+                client_state={"session": "cookie123"},
             )
 
             assert tokens == {"tokenstore": "new_tokenstore"}
-            mock_garmin_cls.assert_called_once_with(
-                email="testuser@example.com", password="secret_password"
+            mock_garmin_cls.assert_called_once_with()
+            mock_garmin_inst.resume_login.assert_called_once_with(
+                {"session": "cookie123"}, "123456"
             )
-            mock_garmin_inst.login.assert_called_once_with(mfa_code="123456")
+
+    asyncio.run(run())
+
+
+def test_login_with_credentials_mfa_missing_client_state() -> None:
+    """Test credential login fails cleanly when mfa_code is provided without client_state."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        with pytest.raises(ConfigEntryAuthFailed) as exc_info:
+            await client_adapter.async_login_with_credentials(
+                username="testuser@example.com", password="secret_password", mfa_code="123456"
+            )
+        assert "without active session state" in str(exc_info.value)
+
+    asyncio.run(run())
+
+
+def test_login_with_credentials_mfa_resume_auth_failure() -> None:
+    """Test resume_login authentication failure raises ConfigEntryAuthFailed."""
+
+    async def run() -> None:
+        mock_hass = MagicMock()
+
+        async def fake_executor(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=fake_executor)
+
+        mock_storage = MagicMock()
+        client_adapter = GarminClient(mock_hass, mock_storage)
+
+        with patch("custom_components.garmin_ha_ai.garmin_client.Garmin") as mock_garmin_cls:
+            mock_garmin_inst = MagicMock()
+            mock_garmin_inst.resume_login.side_effect = GarminConnectAuthenticationError("Invalid MFA passcode")
+            mock_garmin_cls.return_value = mock_garmin_inst
+
+            with pytest.raises(ConfigEntryAuthFailed):
+                await client_adapter.async_login_with_credentials(
+                    username="testuser@example.com",
+                    password="secret_password",
+                    mfa_code="000000",
+                    client_state={"session": "expired"},
+                )
 
     asyncio.run(run())
 
@@ -517,8 +573,12 @@ def test_async_login_with_credentials_mfa_tuple() -> None:
             mock_garmin_inst.login.return_value = ("needs_mfa", "extra_info")
             mock_garmin_cls.return_value = mock_garmin_inst
 
-            with pytest.raises(GarminMfaRequired):
+            with pytest.raises(GarminMfaRequired) as exc_info:
                 await client_adapter.async_login_with_credentials("user@example.com", "pass")
+            assert exc_info.value.client_state == "extra_info"
+            mock_garmin_cls.assert_called_once_with(
+                email="user@example.com", password="pass", return_on_mfa=True
+            )
 
     asyncio.run(run())
 

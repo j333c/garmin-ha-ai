@@ -10,6 +10,7 @@ Enable users to configure their preferred coaching language in the Options Flow 
 
 - Story 10.1: AI Response Language Preference in Options Flow & Prompt Assembler (`options_flow.py`, `prompt.py`, `const.py`)
 - Story 10.2: Dashboard Usability Overhaul — Weight Display, Resilient Gauges & Responsive Layout (`frontend/garmin-ha-ai-cards.js`)
+- Story 10.3: Garmin MFA Session Resume & Decoupled Verification Fix (`garmin_client.py`, `config_flow.py`, `manifest.json`)
 
 ## Requirements & Constraints
 

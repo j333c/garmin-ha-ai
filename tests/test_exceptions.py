@@ -59,6 +59,18 @@ def test_exception_taxonomy_hierarchy():
     assert issubclass(AIEngineConnectionError, AIEngineError)
 
 
+def test_garmin_mfa_required_client_state():
+    """Test GarminMfaRequired properly stores message and optional client_state."""
+    exc_default = GarminMfaRequired()
+    assert str(exc_default) == "Garmin MFA required"
+    assert exc_default.client_state is None
+
+    custom_state = {"cookie": "auth_token_xyz", "csrf": "token123"}
+    exc_with_state = GarminMfaRequired("Custom MFA message", client_state=custom_state)
+    assert str(exc_with_state) == "Custom MFA message"
+    assert exc_with_state.client_state == custom_state
+
+
 def test_translation_files_integrity_and_matching_keys():
     """Verify that strings.json, en.json, and de.json have identical key structures."""
     comp_dir = Path(__file__).parent.parent / "custom_components" / "garmin_ha_ai"
